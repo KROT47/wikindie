@@ -5,7 +5,7 @@ import { api, type BoardSummary, type TaskInfo, type TaskOverviewScope } from '.
 import { cardTypeLabel } from '../../lib/cardType'
 import { isDoneColumn } from '../../lib/kanban'
 import { pageUrl } from '../../lib/paths'
-import { priorityColor, priorityLabel, priorityRank } from '../../lib/priority'
+import { priorityColor, priorityDotClass, priorityLabel, priorityRank } from '../../lib/priority'
 import { canWrite, useAuthStore, useFilesStore, useGuestMode, useTaskFiltersStore } from '../../lib/store'
 import { compileSearchRegex, hasAppliedFilters, hasFilterValues, matchesBoardSearch, matchesTaskInfoFilters, type TaskFilterValues } from '../../lib/taskFilters'
 import type { WikiEvent } from '../../lib/websocket'
@@ -757,7 +757,7 @@ function TaskPreview({ showAssignees, task }: { showAssignees: boolean; task: Ta
   return (
     <Link to={pageUrl(task.boardPath)} className={`relative block rounded-md px-2 pt-1 transition hover:bg-accent/10 ${assignees.length ? 'pb-7' : 'pb-1'}`}>
       <div className="flex min-w-0 items-start gap-2">
-        <span className={`mt-1.5 size-2 shrink-0 rounded-full ${priorityColor(task.priority)}`} title={priorityLabel(task.priority)} />
+        <span className={`${priorityDotClass} ${priorityColor(task.priority)}`} title={priorityLabel(task.priority)} />
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-start gap-1.5 break-words text-sm text-text">
             <CardTypeIcon className="mt-[3px] size-3.5" title={`${cardTypeLabel(task.type)} card`} type={task.type} />

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import type { KanbanBoard, KanbanCard as Card } from '../../lib/api'
 import { cardTypeLabel } from '../../lib/cardType'
 import { setActiveDragSource } from '../../lib/kanban'
-import { priorityColor, priorityLabel } from '../../lib/priority'
+import { priorityColor, priorityDotClass, priorityLabel } from '../../lib/priority'
 import { ActionMenu, ActionMenuItem } from '../ui/ActionMenu'
 import { AssigneeStack } from '../ui/AssigneeBadges'
 import { CardTypeIcon } from '../ui/CardTypeIcon'
@@ -100,7 +100,6 @@ export function KanbanCard({
         }}
       >
         <div className="flex items-start gap-3">
-          {card.priority && <span className={`mt-2 size-2 shrink-0 rounded-full ${priorityColor(card.priority)}`} title={priorityLabel(card.priority)} />}
           <div className="min-w-0 flex-1">
             <div className="block min-w-0 text-left text-sm text-text">
               {(card.id || card.archived || labels.length > 0) && (
@@ -112,6 +111,7 @@ export function KanbanCard({
                 </span>
               )}
               <span className="flex min-w-0 items-start gap-1.5">
+                {card.priority && <span className={`${priorityDotClass} ${priorityColor(card.priority)}`} title={priorityLabel(card.priority)} />}
                 <CardTypeIcon className="mt-[3px] size-3.5" title={`${cardTypeLabel(card.type)} card`} type={card.type} />
                 <span className="block min-w-0 break-words">{card.title}</span>
               </span>
