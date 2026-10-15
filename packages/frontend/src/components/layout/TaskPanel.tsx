@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowUpRight, Filter, ListChecks, PanelRightClose, Panel
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type BoardSummary, type TaskInfo, type TaskOverviewScope } from '../../lib/api'
+import { cardTypeLabel } from '../../lib/cardType'
 import { isDoneColumn } from '../../lib/kanban'
 import { pageUrl } from '../../lib/paths'
 import { priorityColor, priorityLabel, priorityRank } from '../../lib/priority'
@@ -9,6 +10,7 @@ import { canWrite, useAuthStore, useFilesStore, useGuestMode, useTaskFiltersStor
 import { compileSearchRegex, hasAppliedFilters, hasFilterValues, matchesBoardSearch, matchesTaskInfoFilters, type TaskFilterValues } from '../../lib/taskFilters'
 import type { WikiEvent } from '../../lib/websocket'
 import { AssigneeCorner } from '../ui/AssigneeBadges'
+import { CardTypeIcon } from '../ui/CardTypeIcon'
 import { PageIcon } from '../ui/PageIcon'
 
 function completion(done: number, total: number) {
@@ -73,12 +75,14 @@ export function TaskPanel({
   const showAssignees = !isGuestMode
   const setTree = useFilesStore((state) => state.setTree)
   const priorityFilter = useTaskFiltersStore((state) => state.priorityFilter)
+  const typeFilter = useTaskFiltersStore((state) => state.typeFilter)
   const assigneeFilter = useTaskFiltersStore((state) => state.assigneeFilter)
   const labelFilter = useTaskFiltersStore((state) => state.labelFilter)
   const stateFilter = useTaskFiltersStore((state) => state.stateFilter)
   const searchPattern = useTaskFiltersStore((state) => state.searchPattern)
   const setTaskFilterPath = useTaskFiltersStore((state) => state.setTaskFilterPath)
   const setPriorityFilter = useTaskFiltersStore((state) => state.setPriorityFilter)
+  const setTypeFilter = useTaskFiltersStore((state) => state.setTypeFilter)
   const setAssigneeFilter = useTaskFiltersStore((state) => state.setAssigneeFilter)
   const setLabelFilter = useTaskFiltersStore((state) => state.setLabelFilter)
   const setStateFilter = useTaskFiltersStore((state) => state.setStateFilter)
@@ -147,13 +151,13 @@ export function TaskPanel({
   const isBoardScope = scope === 'board'
   const assigneeOptions = useMemo(() => (showAssignees ? uniqueAssignees(tasks) : []), [showAssignees, tasks])
   const labelOptions = useMemo(() => uniqueLabels(tasks), [tasks])
-  const taskFilters = useMemo<TaskFilterValues>(() => ({ priorityFilter, assigneeFilter: showAssignees ? assigneeFilter : 'all', labelFilter, stateFilter, searchPattern }), [assigneeFilter, labelFilter, priorityFilter, searchPattern, showAssignees, stateFilter])
+  const taskFilters = useMemo<TaskFilterValues>(() => ({ priorityFilter, typeFilter, assigneeFilter: showAssignees ? assigneeFilter : 'all', labelFilter, stateFilter, searchPattern }), [assigneeFilter, labelFilter, priorityFilter, searchPattern, showAssignees, stateFilter, typeFilter])
   const search = useMemo(() => compileSearchRegex(searchPattern), [searchPattern])
   const searchRegex = search.regex
   const searchError = search.error
   const hasFilterInput = hasFilterValues(taskFilters)
   const filtersApplied = hasAppliedFilters(taskFilters, searchRegex)
-  const hasTaskFilters = taskFilters.priorityFilter !== 'all' || taskFilters.assigneeFilter !== 'all' || taskFilters.labelFilter !== 'all' || taskFilters.stateFilter !== 'active'
+  const hasTaskFilters = taskFilters.priorityFilter !== 'all' || taskFilters.typeFilter !== 'all' || taskFilters.assigneeFilter !== 'all' || taskFilters.labelFilter !== 'all' || taskFilters.stateFilter !== 'active'
   const hasSearchFilter = Boolean(searchRegex)
   const allTasksByBoard = useMemo(() => taskGroupsByBoard(tasks), [tasks])
   const filteredTasks = useMemo(
@@ -326,11 +330,13 @@ export function TaskPanel({
               onPriorityChange={setPriorityFilter}
               onSearchChange={setSearchPattern}
               onStateChange={setStateFilter}
+              onTypeChange={setTypeFilter}
               priorityFilter={priorityFilter}
               searchError={searchError}
               searchPattern={searchPattern}
               showAssignees={showAssignees}
               stateFilter={stateFilter}
+              typeFilter={typeFilter}
               scope={scope}
             />
             {isBoardScope && boards[0] && (
@@ -449,11 +455,13 @@ function FilteringPanel({
   onPriorityChange,
   onSearchChange,
   onStateChange,
+  onTypeChange,
   priorityFilter,
   searchError,
   searchPattern,
   showAssignees,
   stateFilter,
+  typeFilter,
   scope,
 }: {
   assigneeFilter: string
@@ -467,11 +475,13 @@ function FilteringPanel({
   onPriorityChange: (value: TaskFilterValues['priorityFilter']) => void
   onSearchChange: (value: string) => void
   onStateChange: (value: TaskFilterValues['stateFilter']) => void
+  onTypeChange: (value: TaskFilterValues['typeFilter']) => void
   priorityFilter: TaskFilterValues['priorityFilter']
   searchError: string
   searchPattern: string
   showAssignees: boolean
   stateFilter: TaskFilterValues['stateFilter']
+  typeFilter: TaskFilterValues['typeFilter']
   scope: TaskOverviewScope
 }) {
   return (
@@ -511,6 +521,18 @@ function FilteringPanel({
             <option value="medium">Medium</option>
             <option value="low">Low</option>
             <option value="none">No priority</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs text-text-muted">
+          Type
+          <select
+            className="w-full rounded-md border border-border bg-input px-2 py-1.5 text-sm text-text outline-none transition focus:border-accent"
+            value={typeFilter}
+            onChange={(event) => onTypeChange(event.target.value as TaskFilterValues['typeFilter'])}
+          >
+            <option value="all">Tasks and bugs</option>
+            <option value="bug">Bugs only</option>
+            <option value="task">Tasks only</option>
           </select>
         </label>
         {showAssignees && (
@@ -737,7 +759,10 @@ function TaskPreview({ showAssignees, task }: { showAssignees: boolean; task: Ta
       <div className="flex min-w-0 items-start gap-2">
         <span className={`mt-1.5 size-2 shrink-0 rounded-full ${priorityColor(task.priority)}`} title={priorityLabel(task.priority)} />
         <div className="min-w-0 flex-1">
-          <p className="break-words text-sm text-text">{task.id ? `[${task.id}] ` : ''}{task.title}</p>
+          <p className="flex min-w-0 items-start gap-1.5 break-words text-sm text-text">
+            <CardTypeIcon className="mt-[3px] size-3.5" title={`${cardTypeLabel(task.type)} card`} type={task.type} />
+            <span className="min-w-0 break-words">{task.id ? `[${task.id}] ` : ''}{task.title}</span>
+          </p>
           <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-text-muted">
             <PageIcon icon={task.columnIcon} fallback="column" className="size-3 shrink-0" />
             <span className="min-w-0 truncate">{task.columnTitle}</span>

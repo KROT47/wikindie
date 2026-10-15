@@ -1,10 +1,12 @@
 import { Archive, Check, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { KanbanBoard, KanbanCard as Card } from '../../lib/api'
+import { cardTypeLabel } from '../../lib/cardType'
 import { setActiveDragSource } from '../../lib/kanban'
 import { priorityColor, priorityLabel } from '../../lib/priority'
 import { ActionMenu, ActionMenuItem } from '../ui/ActionMenu'
 import { AssigneeStack } from '../ui/AssigneeBadges'
+import { CardTypeIcon } from '../ui/CardTypeIcon'
 import { PageIcon } from '../ui/PageIcon'
 import { KanbanCardDialog } from './KanbanCardDialog'
 
@@ -109,7 +111,10 @@ export function KanbanCard({
                   {labels.length > 3 && <span className="rounded-full border border-border bg-input px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">+{labels.length - 3}</span>}
                 </span>
               )}
-              <span className="block min-w-0 break-words">{card.title}</span>
+              <span className="flex min-w-0 items-start gap-1.5">
+                <CardTypeIcon className="mt-[3px] size-3.5" title={`${cardTypeLabel(card.type)} card`} type={card.type} />
+                <span className="block min-w-0 break-words">{card.title}</span>
+              </span>
               {(card.description || commentCount > 0) && (
                 <span className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-text-muted">
                   {card.description && <span className="whitespace-nowrap">Has details</span>}

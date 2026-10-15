@@ -18,6 +18,7 @@ import {
   serializeKanban,
   withKanbanColumnMetadata,
   type CardPriority,
+  type CardType,
   type TaskComment,
   type KanbanColumnStatus,
 } from './kanban.js'
@@ -72,6 +73,7 @@ export interface TaskInfo {
   description?: string
   comments?: TaskComment[]
   priority?: CardPriority
+  type?: CardType
   assignees: string[]
   labels: string[]
   archived?: boolean
@@ -415,6 +417,7 @@ function summarizeBoardWithTasks(pagePath: string, file: MarkdownFile): { summar
       description: card.description,
       comments: card.comments,
       priority: card.priority,
+      type: card.type,
       assignees: [...card.assignees],
       labels: [...card.labels],
       archived: card.archived,

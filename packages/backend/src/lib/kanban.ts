@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 export type CardPriority = 'high' | 'medium' | 'low'
+export type CardType = 'task' | 'bug'
 export type KanbanColumnStatus = 'backlog' | 'next' | 'in_progress' | 'done' | 'custom'
 
 export interface TaskComment {
@@ -29,6 +30,7 @@ export interface KanbanCard {
   description?: string
   comments?: TaskComment[]
   priority?: CardPriority
+  type?: CardType
   assignees: string[]
   labels: string[]
   archived?: boolean
@@ -252,11 +254,12 @@ export function isReservedLabelName(label: string) {
   return reservedLabelNames.has(label.trim().toLowerCase())
 }
 
-function parseMetadataBlock(raw: string): { priority?: CardPriority; assignees: string[]; labels: string[]; archived?: boolean } | null {
+function parseMetadataBlock(raw: string): { priority?: CardPriority; type?: CardType; assignees: string[]; labels: string[]; archived?: boolean } | null {
   const tokens = raw.trim().split(/\s+/).filter(Boolean)
   if (!tokens.length) return null
 
   let priority: CardPriority | undefined
+  let type: CardType | undefined
   const assignees: string[] = []
   const labels: string[] = []
   let archived = false
@@ -264,6 +267,12 @@ function parseMetadataBlock(raw: string): { priority?: CardPriority; assignees: 
   for (const token of tokens) {
     if (token === '!archived') {
       archived = true
+      continue
+    }
+
+    const typeMatch = token.match(/^!(bug|task)$/i)
+    if (typeMatch) {
+      type = typeMatch[1].toLowerCase() as CardType
       continue
     }
 
@@ -300,14 +309,14 @@ function parseMetadataBlock(raw: string): { priority?: CardPriority; assignees: 
     return null
   }
 
-  return { priority, assignees, labels, archived: archived || undefined }
+  return { priority, type, assignees, labels, archived: archived || undefined }
 }
 
 function uniqueLabels(labels: string[]) {
   return [...new Set(labels.map((label) => label.trim().toLowerCase()).filter((label) => label && !isReservedLabelName(label)))]
 }
 
-function parseCardTags(raw: string): { title: string; priority?: CardPriority; assignees: string[]; labels: string[]; archived?: boolean } {
+function parseCardTags(raw: string): { title: string; priority?: CardPriority; type?: CardType; assignees: string[]; labels: string[]; archived?: boolean } {
   const trimmed = raw.trim()
   if (!trimmed) return { title: '', assignees: [], labels: [] }
 
@@ -325,6 +334,7 @@ function parseCardTags(raw: string): { title: string; priority?: CardPriority; a
   const tokens = trimmed.split(/\s+/)
   let tokensConsumed = 0
   let priority: CardPriority | undefined
+  let type: CardType | undefined
   const assignees: string[] = []
   const labels: string[] = []
   let archived = false
@@ -332,6 +342,7 @@ function parseCardTags(raw: string): { title: string; priority?: CardPriority; a
     const block = parseMetadataBlock(tokens[i])
     if (!block) break
     if (block.priority) priority = block.priority
+    if (block.type) type = block.type
     if (block.assignees.length) assignees.unshift(...block.assignees)
     if (block.labels.length) labels.unshift(...block.labels)
     if (block.archived) archived = true
@@ -339,7 +350,7 @@ function parseCardTags(raw: string): { title: string; priority?: CardPriority; a
   }
   if (tokensConsumed > 0) {
     const title = tokens.slice(0, tokens.length - tokensConsumed).join(' ')
-    if (title) return { title, priority, assignees, labels: uniqueLabels(labels), archived: archived || undefined }
+    if (title) return { title, priority, type, assignees, labels: uniqueLabels(labels), archived: archived || undefined }
   }
 
   return { title: trimmed, assignees: [], labels: [] }
@@ -431,9 +442,10 @@ function normalizeCard(card: KanbanCard): KanbanCard {
   const description = typeof card.description === 'string' ? card.description.trimEnd() : undefined
   const comments = normalizeComments(card.comments)
   const priority = card.priority === 'high' || card.priority === 'medium' || card.priority === 'low' ? card.priority : undefined
+  const type = card.type === 'task' || card.type === 'bug' ? card.type : undefined
   const assignees = Array.isArray(card.assignees) ? card.assignees.map((assignee) => String(assignee).trim()).filter(Boolean) : []
   const labels = Array.isArray(card.labels) ? uniqueLabels(card.labels.map(String).filter((label) => labelPattern.test(label))) : []
-  return { uid, id, title, description: description || undefined, comments: comments.length ? comments : undefined, priority, assignees, labels, archived: card.archived === true || undefined }
+  return { uid, id, title, description: description || undefined, comments: comments.length ? comments : undefined, priority, type, assignees, labels, archived: card.archived === true || undefined }
 }
 
 export function normalizeKanbanBoard(
@@ -521,6 +533,7 @@ export function serializeKanban(board: KanbanBoard) {
             ...(card.assignees ?? []).map(formatAssigneeTag),
             ...(card.labels ?? []).map((label) => `#${label}`),
             card.priority ? `#${card.priority}` : '',
+            card.type === 'bug' ? '!bug' : '',
             card.archived ? '!archived' : '',
           ]
             .filter(Boolean)

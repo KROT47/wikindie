@@ -1,7 +1,8 @@
 import { ArrowLeft, Check, CheckCircle2, ListChecks, Plus, Settings } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api, type CardPriority, type KanbanBoard as Board, type KanbanCard as Card, type PageBundle, type TaskIdSettings } from '../../lib/api'
+import { api, type CardPriority, type CardType, type KanbanBoard as Board, type KanbanCard as Card, type PageBundle, type TaskIdSettings } from '../../lib/api'
+import { cardTypeLabel, cardTypeOptions } from '../../lib/cardType'
 import { createKanbanColumn, getActiveColumnReorderSource, hasColumnDragPayload, isDoneColumn, sortBoardByPriority } from '../../lib/kanban'
 import { breadcrumbsFromPath, findTreeNode, goBack, pageNameFromPath, pageUrl } from '../../lib/paths'
 import { priorityColor, priorityLabel, priorityRank } from '../../lib/priority'
@@ -11,6 +12,7 @@ import { useMobileTaskPanel } from '../layout/AppLayout'
 import { ActionMenu, ActionMenuItem } from '../ui/ActionMenu'
 import { UserIconBadge } from '../ui/AssigneeBadges'
 import { Button } from '../ui/Button'
+import { CardTypeIcon } from '../ui/CardTypeIcon'
 import { IconPicker } from '../ui/IconPicker'
 import { PageIcon } from '../ui/PageIcon'
 import { KanbanCardDialog } from './KanbanCardDialog'
@@ -73,6 +75,7 @@ export function KanbanBoard({
   const isGuestMode = useGuestMode()
   const filterPagePath = useTaskFiltersStore((state) => state.pagePath)
   const priorityFilter = useTaskFiltersStore((state) => state.priorityFilter)
+  const typeFilter = useTaskFiltersStore((state) => state.typeFilter)
   const assigneeFilter = useTaskFiltersStore((state) => state.assigneeFilter)
   const labelFilter = useTaskFiltersStore((state) => state.labelFilter)
   const stateFilter = useTaskFiltersStore((state) => state.stateFilter)
@@ -105,8 +108,8 @@ export function KanbanBoard({
   const archivedCount = useMemo(() => board.columns.reduce((sum, column) => sum + column.cards.filter((card) => card.archived).length, 0), [board])
   const labelOptions = useMemo(() => uniqueLabels(board), [board])
   const taskFilters = useMemo<TaskFilterValues>(
-    () => (filterPagePath === path ? { priorityFilter, assigneeFilter: showAssignees ? assigneeFilter : 'all', labelFilter, stateFilter, searchPattern } : defaultTaskFilters),
-    [assigneeFilter, filterPagePath, labelFilter, path, priorityFilter, searchPattern, showAssignees, stateFilter],
+    () => (filterPagePath === path ? { priorityFilter, typeFilter, assigneeFilter: showAssignees ? assigneeFilter : 'all', labelFilter, stateFilter, searchPattern } : defaultTaskFilters),
+    [assigneeFilter, filterPagePath, labelFilter, path, priorityFilter, searchPattern, showAssignees, stateFilter, typeFilter],
   )
   const search = useMemo(() => compileSearchRegex(taskFilters.searchPattern), [taskFilters.searchPattern])
   const filtersApplied = hasAppliedFilters(taskFilters, search.regex)
@@ -540,6 +543,7 @@ function KanbanTableView({
   const [adding, setAdding] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskColumn, setNewTaskColumn] = useState(defaultColumnIndex)
+  const [newTaskType, setNewTaskType] = useState<CardType>('task')
   const [newTaskPriority, setNewTaskPriority] = useState<CardPriority | undefined>()
   const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([])
   const editingColumn = editing ? board.columns[editing.columnIndex] : undefined
@@ -559,9 +563,10 @@ function KanbanTableView({
     const title = newTaskTitle.trim()
     if (!title || !board.columns[newTaskColumn]) return
     const next = structuredClone(board)
-    next.columns[newTaskColumn].cards.push({ title, priority: newTaskPriority, assignees: newTaskAssignees, labels: [] })
+    next.columns[newTaskColumn].cards.push({ title, type: newTaskType, priority: newTaskPriority, assignees: newTaskAssignees, labels: [] })
     onUpdate(next)
     setNewTaskTitle('')
+    setNewTaskType('task')
     setNewTaskPriority(undefined)
     setNewTaskAssignees([])
     setAdding(false)
@@ -571,6 +576,7 @@ function KanbanTableView({
     setAdding(false)
     setNewTaskTitle('')
     setNewTaskColumn(defaultColumnIndex)
+    setNewTaskType('task')
     setNewTaskPriority(undefined)
     setNewTaskAssignees([])
   }
@@ -604,7 +610,10 @@ function KanbanTableView({
                   {card.id && <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-accent">{card.id}</span>}
                   {card.labels?.map((label) => <span key={label} className="rounded-full border border-border bg-input px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">#{label}</span>)}
                 </span>
-                <span className="block break-words text-text">{card.title}</span>
+                <span className="flex min-w-0 items-start gap-1.5">
+                  <CardTypeIcon className="mt-[3px] size-3.5" title={`${cardTypeLabel(card.type)} card`} type={card.type} />
+                  <span className="block break-words text-text">{card.title}</span>
+                </span>
                 {(card.description || card.comments?.length) && (
                   <span className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-text-muted">
                     {card.description && <span className="whitespace-nowrap">Details</span>}
@@ -650,7 +659,7 @@ function KanbanTableView({
                   value={newTaskTitle}
                 />
               </label>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <label className="grid gap-1.5 text-sm font-medium text-text">
                   Column
                   <select
@@ -661,6 +670,22 @@ function KanbanTableView({
                     {board.columns.map((column, index) => <option key={`${column.id}-${index}`} value={index}>{column.title}</option>)}
                   </select>
                 </label>
+                <div className="grid gap-1.5 text-sm font-medium text-text">
+                  Type
+                  <div className="flex rounded-md border border-border bg-card p-0.5">
+                    {cardTypeOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 text-sm font-normal transition ${newTaskType === option.value ? 'bg-accent/15 text-text' : 'text-text-muted hover:text-text'}`}
+                        onClick={() => setNewTaskType(option.value)}
+                        type="button"
+                      >
+                        <CardTypeIcon className="size-4" type={option.value} />
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <label className="grid gap-1.5 text-sm font-medium text-text">
                   Priority
                   <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { Github, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logoUrl from '../../assets/wikindie_logo.png'
 import { api } from '../../lib/api'
@@ -11,6 +11,20 @@ import { PageIcon } from '../ui/PageIcon'
 
 import { AccountMenu } from './AccountMenu'
 import { TreeItem } from './TreeItem'
+
+const sidebarWidthKey = 'wikindie:sidebar-width'
+const defaultSidebarWidth = 300
+const minSidebarWidth = 200
+const maxSidebarWidth = 560
+
+function clampSidebarWidth(value: number) {
+  return Math.min(maxSidebarWidth, Math.max(minSidebarWidth, Math.round(value)))
+}
+
+function readStoredSidebarWidth() {
+  const stored = Number(localStorage.getItem(sidebarWidthKey))
+  return Number.isFinite(stored) && stored > 0 ? clampSidebarWidth(stored) : defaultSidebarWidth
+}
 
 export function Sidebar({
   mobileOpen,
@@ -38,6 +52,63 @@ export function Sidebar({
   const [newFileOpen, setNewFileOpen] = useState(false)
   const [pageDragActive, setPageDragActive] = useState(false)
   const [rootDragOver, setRootDragOver] = useState(false)
+  const [width, setWidth] = useState(readStoredSidebarWidth)
+  const [resizing, setResizing] = useState(false)
+  const widthRef = useRef(width)
+  const asideRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    widthRef.current = width
+  }, [width])
+
+  const setLiveWidth = (next: number) => {
+    const clamped = clampSidebarWidth(next)
+    widthRef.current = clamped
+    asideRef.current?.style.setProperty('--sidebar-width', `${clamped}px`)
+  }
+
+  const persistWidth = () => {
+    localStorage.setItem(sidebarWidthKey, String(widthRef.current))
+  }
+
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (collapsed || event.button !== 0) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = widthRef.current
+    const handle = event.currentTarget
+    handle.setPointerCapture(event.pointerId)
+    setResizing(true)
+    document.body.classList.add('wikindie-resizing')
+
+    const onMove = (moveEvent: PointerEvent) => setLiveWidth(startWidth + moveEvent.clientX - startX)
+    const onUp = () => {
+      handle.releasePointerCapture?.(event.pointerId)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      document.body.classList.remove('wikindie-resizing')
+      setResizing(false)
+      setWidth(widthRef.current)
+      persistWidth()
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }
+
+  const nudgeWidth = (delta: number) => {
+    setLiveWidth(widthRef.current + delta)
+    setWidth(widthRef.current)
+    persistWidth()
+  }
+
+  const resetWidth = () => {
+    setLiveWidth(defaultSidebarWidth)
+    setWidth(widthRef.current)
+    persistWidth()
+  }
 
   const selectedPath = useMemo(() => pagePathFromLocation(location.pathname), [location.pathname])
   const selectedNode = useMemo(() => (selectedPath ? findTreeNode(tree, selectedPath) : undefined), [selectedPath, tree])
@@ -93,7 +164,40 @@ export function Sidebar({
   return (
     <>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-overlay lg:hidden" onClick={onCloseMobile} aria-label="Close sidebar" />}
-      <aside className={`panel fixed left-0 top-0 z-40 flex h-dvh w-[min(300px,calc(100vw-1.5rem))] flex-col transition-[transform,width,padding] duration-200 lg:static lg:z-auto lg:h-auto lg:min-h-0 lg:shrink-0 ${collapsed ? 'lg:w-[72px]' : 'lg:w-[300px]'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside
+        className={`panel fixed left-0 top-0 z-40 flex h-dvh w-[min(300px,calc(100vw-1.5rem))] flex-col lg:relative lg:z-auto lg:h-auto lg:min-h-0 lg:shrink-0 ${collapsed ? 'lg:w-[72px]' : 'lg:w-[var(--sidebar-width)]'} ${resizing ? 'transition-none' : 'transition-[transform,width,padding] duration-200'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        ref={asideRef}
+        style={{ '--sidebar-width': `${width}px` } as React.CSSProperties}
+      >
+        {!collapsed && (
+          <div
+            aria-label="Resize sidebar"
+            aria-orientation="vertical"
+            aria-valuemax={maxSidebarWidth}
+            aria-valuemin={minSidebarWidth}
+            aria-valuenow={width}
+            className={`absolute inset-y-0 right-0 z-50 hidden w-2 translate-x-1/2 cursor-col-resize touch-none select-none lg:block ${resizing ? 'bg-accent/30' : 'bg-transparent hover:bg-accent/25'}`}
+            onDoubleClick={resetWidth}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault()
+                nudgeWidth(-16)
+              }
+              if (event.key === 'ArrowRight') {
+                event.preventDefault()
+                nudgeWidth(16)
+              }
+              if (event.key === 'Home') {
+                event.preventDefault()
+                resetWidth()
+              }
+            }}
+            onPointerDown={startResize}
+            role="separator"
+            tabIndex={0}
+            title="Drag to resize, double-click to reset"
+          />
+        )}
 
         {/* Zone A: Logo + desktop collapse toggle */}
         <div className={`hidden items-center border-b border-border lg:flex ${collapsed ? 'justify-center px-2 py-3' : 'justify-between gap-2 px-3 py-3'}`}>

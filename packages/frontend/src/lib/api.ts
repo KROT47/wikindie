@@ -33,6 +33,7 @@ export interface PageBundle extends MarkdownFile {
 }
 
 export type CardPriority = 'high' | 'medium' | 'low'
+export type CardType = 'task' | 'bug'
 export type KanbanColumnStatus = 'backlog' | 'next' | 'in_progress' | 'done' | 'custom'
 
 export interface TaskComment {
@@ -61,6 +62,7 @@ export interface KanbanCard {
   description?: string
   comments?: TaskComment[]
   priority?: CardPriority
+  type?: CardType
   assignees: string[]
   labels: string[]
   archived?: boolean
@@ -108,6 +110,7 @@ export interface TaskInfo {
   description?: string
   comments?: TaskComment[]
   priority?: CardPriority
+  type?: CardType
   assignees: string[]
   labels: string[]
   archived?: boolean

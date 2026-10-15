@@ -235,9 +235,13 @@ export function TreeItem({
     navigate(pageUrl(newPath))
   }
 
+  const currentPagePath = pagePathFromLocation(location.pathname)
+  const isActive = currentPagePath === node.path || currentPagePath.startsWith(`${node.path}/`)
+  const hasChildren = Boolean(node.children?.length)
+
   return (
     <div
-      className={`${dragMode === 'inside' ? 'rounded-md bg-accent/10 ring-1 ring-accent/40' : ''} ${dragging ? 'opacity-60' : ''} ${depth > 0 ? 'ml-2 border-l border-border' : ''}`}
+      className={`${dragMode === 'inside' ? 'rounded-md bg-accent/10 ring-1 ring-accent/40' : ''} ${dragging ? 'opacity-60' : ''} ${depth > 0 ? 'border-l border-border/60' : ''}`}
       onDragOver={(event) => {
         if (!mayWrite) return
         if (!hasPageDragPayload(event.dataTransfer)) return
@@ -248,20 +252,33 @@ export function TreeItem({
       }}
       onDragLeave={() => setDragMode(null)}
       onDrop={dropOnNode}
-      style={{ paddingLeft: depth * 10 }}
+      style={{ paddingLeft: depth * 8 }}
     >
-      <div className="group relative flex items-center gap-1 rounded-md border-y-2 border-transparent" ref={rowRef}>
+      <div
+        className={`group relative flex items-center rounded-md transition-colors ${isActive ? 'bg-accent/10' : 'hover:bg-surface-hover'}`}
+        ref={rowRef}
+      >
+        {isActive && <span aria-hidden className="pointer-events-none absolute inset-y-1 left-0 w-0.5 rounded-full bg-accent" />}
         {(dragMode === 'before' || dragMode === 'after') && (
-          <div className={`pointer-events-none absolute left-6 right-2 z-10 flex items-center ${dragMode === 'before' ? '-top-1.5' : '-bottom-1.5'}`}>
+          <div className={`pointer-events-none absolute left-4 right-1.5 z-10 flex items-center ${dragMode === 'before' ? '-top-1.5' : '-bottom-1.5'}`}>
             <span className="h-1 flex-1 rounded-full bg-accent shadow-[0_0_12px_var(--color-accent)]" />
             <span className="ml-2 rounded-full border border-control-border bg-panel px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent shadow-sm shadow-shadow">
               {dragMode === 'before' ? 'Place before' : 'Place after'}
             </span>
           </div>
         )}
-        <button className={`rounded p-1 text-text-muted hover:bg-accent/10 hover:text-text ${collapsed ? 'lg:hidden' : ''}`} onClick={toggle}>
-          <ChevronRight size={14} className={`transition ${open ? 'rotate-90' : ''}`} />
-        </button>
+        {hasChildren ? (
+          <button
+            aria-label={open ? `Collapse ${node.title}` : `Expand ${node.title}`}
+            className={`grid size-5 shrink-0 place-items-center rounded text-text-muted transition hover:bg-accent/15 hover:text-text ${collapsed ? 'lg:hidden' : ''}`}
+            onClick={toggle}
+            type="button"
+          >
+            <ChevronRight size={14} className={`transition ${open ? 'rotate-90' : ''}`} />
+          </button>
+        ) : (
+          <span aria-hidden className={`size-5 shrink-0 ${collapsed ? 'lg:hidden' : ''}`} />
+        )}
 
         {renaming ? (
           <>
@@ -273,8 +290,8 @@ export function TreeItem({
                 void submitRename()
               }}
             >
-              <div className="flex min-w-0 items-center gap-2 rounded-md border-l-2 border-accent bg-surface-hover px-2 py-1.5 text-sm text-text">
-                <PageIcon icon={node.icon} fallback={node.type === 'board' ? 'board' : 'page'} />
+              <div className="flex min-w-0 items-center gap-1.5 rounded-md bg-surface-hover px-1 py-1 text-sm text-text">
+                <PageIcon icon={node.icon} fallback={node.type === 'board' ? 'board' : 'page'} className="size-5 text-base" />
                 <input
                   autoFocus
                   className="w-full rounded border border-accent bg-input px-2 py-1 text-sm text-text outline-none"
@@ -285,30 +302,30 @@ export function TreeItem({
             </form>
             <NavLink
               className={({ isActive }) =>
-                `${collapsed ? 'hidden lg:flex' : 'hidden'} min-w-0 flex-1 items-center justify-center rounded-md px-0 py-1.5 text-sm hover:bg-surface-hover ${
+                `${collapsed ? 'hidden lg:flex' : 'hidden'} min-w-0 flex-1 items-center justify-center rounded-md px-0 py-1 text-sm hover:bg-surface-hover ${
                   isActive ? 'bg-surface-hover text-text' : 'text-text-muted'
                 }`
               }
               to={pageUrl(node.path)}
               title={node.title}
             >
-              <PageIcon icon={node.icon} fallback={node.type === 'board' ? 'board' : 'page'} />
+              <PageIcon icon={node.icon} fallback={node.type === 'board' ? 'board' : 'page'} className="size-5 text-base" />
             </NavLink>
           </>
         ) : (
           <NavLink
-            className={({ isActive }) =>
-                `flex min-w-0 flex-1 items-center gap-2 rounded-md border-l-2 px-2 py-1.5 text-sm hover:bg-surface-hover ${mayWrite ? 'cursor-grab active:cursor-grabbing' : ''} ${collapsed ? 'lg:justify-center lg:border-l-0 lg:px-0' : ''} ${
-                isActive ? 'border-accent bg-surface-hover text-text' : 'border-transparent text-text-muted'
+            className={
+              `flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pl-1 pr-2 text-sm leading-tight ${mayWrite ? 'cursor-grab active:cursor-grabbing' : ''} ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${
+                isActive ? 'text-text' : 'text-text-muted'
               }`
             }
             to={pageUrl(node.path)}
-            title={collapsed ? node.title : undefined}
+            title={node.title}
             draggable={mayWrite}
             onDragStart={mayWrite ? startPageDrag : undefined}
             onDragEnd={endPageDrag}
           >
-            <PageIcon icon={node.icon} fallback={node.type === 'board' ? 'board' : 'page'} />
+            <PageIcon icon={node.icon} fallback={node.type === 'board' ? 'board' : 'page'} className="size-5 text-base" />
             <span className={`min-w-0 truncate ${collapsed ? 'lg:hidden' : ''}`}>{node.title}</span>
           </NavLink>
         )}
@@ -316,7 +333,7 @@ export function TreeItem({
         {(mayWrite || mayDelete) && (
           <ActionMenu
             align="start"
-            buttonClassName={`grid size-9 place-items-center rounded-md text-text-muted opacity-100 hover:bg-accent/10 hover:text-text lg:opacity-0 lg:group-hover:opacity-100 ${collapsed ? 'lg:hidden' : ''}`}
+            buttonClassName={`mr-0.5 grid size-7 place-items-center rounded-md text-text-muted opacity-100 hover:bg-accent/15 hover:text-text focus-visible:opacity-100 group-focus-within:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 ${collapsed ? 'lg:hidden' : ''}`}
             label="Page actions"
             menuClassName="w-[200px]"
             onClose={() => setConfirmDelete(false)}
@@ -359,7 +376,7 @@ export function TreeItem({
 
       {mayWrite && moving && (
         <form
-          className={`mt-1 flex items-center gap-2 pl-8 ${collapsed ? 'lg:hidden' : ''}`}
+          className={`mt-1 flex items-center gap-2 pl-10 ${collapsed ? 'lg:hidden' : ''}`}
           onSubmit={(event) => {
             event.preventDefault()
             void submitMove()
@@ -381,7 +398,7 @@ export function TreeItem({
 
       {mayWrite && creating && (
         <form
-          className={`mt-1 flex items-center gap-2 pl-8 ${collapsed ? 'lg:hidden' : ''}`}
+          className={`mt-1 flex items-center gap-2 pl-10 ${collapsed ? 'lg:hidden' : ''}`}
           onSubmit={(event) => {
             event.preventDefault()
             void submitCreate()

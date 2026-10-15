@@ -1,12 +1,14 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, X } from 'lucide-react'
-import type { CardPriority, KanbanCard as Card, TaskComment } from '../../lib/api'
+import type { CardPriority, CardType, KanbanCard as Card, TaskComment } from '../../lib/api'
+import { cardTypeOptions } from '../../lib/cardType'
 import { priorityColor } from '../../lib/priority'
 import { useGuestMode } from '../../lib/store'
 import { MarkdownPreview } from '../editor/MarkdownPreview'
 import { Button } from '../ui/Button'
 import { UserIconBadge } from '../ui/AssigneeBadges'
+import { CardTypeIcon } from '../ui/CardTypeIcon'
 
 const BlockEditor = lazy(() => import('../editor/BlockEditor').then((module) => ({ default: module.BlockEditor })))
 
@@ -75,6 +77,7 @@ export function KanbanCardDialog({
   const [title, setTitle] = useState(card.title)
   const [description, setDescription] = useState(card.description ?? '')
   const [priority, setPriority] = useState<CardPriority | undefined>(card.priority)
+  const [cardType, setCardType] = useState<CardType>(card.type ?? 'task')
   const [assignees, setAssignees] = useState<string[]>(card.assignees ?? [])
   const [labels, setLabels] = useState((card.labels ?? []).join(', '))
   const [labelError, setLabelError] = useState('')
@@ -94,6 +97,7 @@ export function KanbanCardDialog({
     setTitle(card.title)
     setDescription(card.description ?? '')
     setPriority(card.priority)
+    setCardType(card.type ?? 'task')
     setAssignees(card.assignees ?? [])
     setLabels((card.labels ?? []).join(', '))
     setLabelError('')
@@ -142,6 +146,7 @@ export function KanbanCardDialog({
       title: cleanTitle,
       description: description.trimEnd() || undefined,
       priority,
+      type: cardType,
       assignees,
       labels: parseLabelInput(labels),
     })
@@ -244,6 +249,24 @@ export function KanbanCardDialog({
           </label>
 
           <div className="mb-4 grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5 text-sm font-medium text-text">
+              Type
+              <div className="flex rounded-md border border-border bg-card p-0.5">
+                {cardTypeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 text-sm font-normal transition disabled:cursor-default ${cardType === option.value ? 'bg-accent/15 text-text' : 'text-text-muted hover:text-text'}`}
+                    disabled={!editable}
+                    onClick={() => setCardType(option.value)}
+                    type="button"
+                  >
+                    <CardTypeIcon className="size-4" type={option.value} />
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <label className="grid gap-1.5 text-sm font-medium text-text">
               Priority
               <div className="flex items-center gap-2">
@@ -263,7 +286,7 @@ export function KanbanCardDialog({
             </label>
 
             {showAssignees && (
-              <div className="grid gap-1.5 text-sm font-medium text-text">
+              <div className="grid gap-1.5 text-sm font-medium text-text sm:col-span-2">
                 Assignees
                 {users.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">

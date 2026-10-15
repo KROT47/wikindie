@@ -1,10 +1,12 @@
-import type { CardPriority, KanbanCard, KanbanColumn, TaskInfo } from './api'
+import type { CardPriority, CardType, KanbanCard, KanbanColumn, TaskInfo } from './api'
 
 export type TaskPriorityFilter = 'all' | CardPriority | 'none'
 export type TaskStateFilter = 'active' | 'archived' | 'all'
+export type TaskTypeFilter = 'all' | CardType
 
 export interface TaskFilterValues {
   priorityFilter: TaskPriorityFilter
+  typeFilter: TaskTypeFilter
   assigneeFilter: string
   labelFilter: string
   stateFilter: TaskStateFilter
@@ -13,6 +15,7 @@ export interface TaskFilterValues {
 
 export const defaultTaskFilters: TaskFilterValues = {
   priorityFilter: 'all',
+  typeFilter: 'all',
   assigneeFilter: 'all',
   labelFilter: 'all',
   stateFilter: 'active',
@@ -34,17 +37,21 @@ export function compileSearchRegex(pattern: string) {
 }
 
 export function hasFilterValues(filters: TaskFilterValues) {
-  return filters.priorityFilter !== 'all' || filters.assigneeFilter !== 'all' || filters.labelFilter !== 'all' || filters.stateFilter !== 'active' || filters.searchPattern.trim() !== ''
+  return filters.priorityFilter !== 'all' || filters.typeFilter !== 'all' || filters.assigneeFilter !== 'all' || filters.labelFilter !== 'all' || filters.stateFilter !== 'active' || filters.searchPattern.trim() !== ''
 }
 
 export function hasAppliedFilters(filters: TaskFilterValues, regex?: RegExp) {
-  return filters.priorityFilter !== 'all' || filters.assigneeFilter !== 'all' || filters.labelFilter !== 'all' || filters.stateFilter !== 'active' || Boolean(regex)
+  return filters.priorityFilter !== 'all' || filters.typeFilter !== 'all' || filters.assigneeFilter !== 'all' || filters.labelFilter !== 'all' || filters.stateFilter !== 'active' || Boolean(regex)
 }
 
 function matchesPriority(priority: CardPriority | undefined, filter: TaskPriorityFilter) {
   if (filter === 'all') return true
   if (filter === 'none') return !priority
   return priority === filter
+}
+
+function matchesType(type: CardType | undefined, filter: TaskTypeFilter) {
+  return filter === 'all' || (type ?? 'task') === filter
 }
 
 function matchesAssignee(assignees: string[] | undefined, filter: string) {
@@ -72,10 +79,11 @@ export function matchesTaskInfoFilters(task: TaskInfo, filters: TaskFilterValues
   const assigneeValues = includeAssignees ? task.assignees : []
   return (
     matchesPriority(task.priority, filters.priorityFilter) &&
+    matchesType(task.type, filters.typeFilter) &&
     matchesAssignee(includeAssignees ? task.assignees : undefined, includeAssignees ? filters.assigneeFilter : 'all') &&
     matchesLabel(task.labels, filters.labelFilter) &&
     matchesState(task.archived, filters.stateFilter) &&
-    matchesRegex(regex, [task.id, task.uid, task.title, task.description, task.columnId, task.columnTitle, task.columnStatus, task.columnIcon, task.priority, ...assigneeValues, ...(task.labels ?? []), ...commentValues])
+    matchesRegex(regex, [task.id, task.uid, task.title, task.description, task.columnId, task.columnTitle, task.columnStatus, task.columnIcon, task.priority, task.type, ...assigneeValues, ...(task.labels ?? []), ...commentValues])
   )
 }
 
@@ -84,10 +92,11 @@ export function matchesKanbanCardFilters(card: KanbanCard, column: Pick<KanbanCo
   const assigneeValues = includeAssignees ? card.assignees ?? [] : []
   return (
     matchesPriority(card.priority, filters.priorityFilter) &&
+    matchesType(card.type, filters.typeFilter) &&
     matchesAssignee(includeAssignees ? card.assignees : undefined, includeAssignees ? filters.assigneeFilter : 'all') &&
     matchesLabel(card.labels, filters.labelFilter) &&
     matchesState(card.archived, filters.stateFilter) &&
-    matchesRegex(regex, [card.id, card.uid, card.title, card.description, column.id, column.title, column.status, card.priority, ...assigneeValues, ...(card.labels ?? []), ...commentValues])
+    matchesRegex(regex, [card.id, card.uid, card.title, card.description, column.id, column.title, column.status, card.priority, card.type, ...assigneeValues, ...(card.labels ?? []), ...commentValues])
   )
 }
 

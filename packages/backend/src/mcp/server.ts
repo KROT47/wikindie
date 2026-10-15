@@ -44,6 +44,7 @@ import {
   serializeKanban,
   withKanbanColumnMetadata,
   type CardPriority,
+  type CardType,
   type KanbanBoard,
   type KanbanCard,
 } from '../lib/kanban.js'
@@ -60,6 +61,7 @@ type BoardLocation = { boardPath?: string; boardId?: string }
 type TaskCommentLocator = BoardLocation & { taskId?: string; cardUid?: string; columnId?: string; index?: number }
 
 const prioritySchema = z.enum(['high', 'medium', 'low'])
+const cardTypeSchema = z.enum(['task', 'bug']).describe('Card type: bug or task (default task)')
 const pageIdentifierSchema = {
   path: z.string().optional().describe('Human page path, such as Projects/Wikindie/Roadmap'),
   id: z.string().optional().describe('Stable page id from frontmatter, such as pg_...'),
@@ -131,16 +133,17 @@ async function readAllBoardPages() {
   return pages.filter((page): page is PageBundle => Boolean(page && page.type === 'board'))
 }
 
-function taskMatchesFilters(task: TaskInfo, filters: { status?: string; priority?: CardPriority; assignee?: string; label?: string; includeArchived?: boolean }) {
+function taskMatchesFilters(task: TaskInfo, filters: { status?: string; priority?: CardPriority; type?: CardType; assignee?: string; label?: string; includeArchived?: boolean }) {
   if (!filters.includeArchived && task.archived) return false
   if (filters.status && task.columnStatus !== filters.status && task.columnId !== filters.status) return false
   if (filters.priority && task.priority !== filters.priority) return false
+  if (filters.type && (task.type ?? 'task') !== filters.type) return false
   if (filters.assignee && !task.assignees.some((assignee) => assignee.toLowerCase() === filters.assignee?.toLowerCase())) return false
   if (filters.label && !task.labels.some((label) => label.toLowerCase() === filters.label?.toLowerCase())) return false
   return true
 }
 
-async function listTasks(input: PageIdentifier & { status?: string; priority?: CardPriority; assignee?: string; label?: string; includeArchived?: boolean }) {
+async function listTasks(input: PageIdentifier & { status?: string; priority?: CardPriority; type?: CardType; assignee?: string; label?: string; includeArchived?: boolean }) {
   if (input.id || input.path) {
     const pagePath = await pagePathFromIdentifier(input)
     const overview = await readTaskOverview(pagePath)
@@ -210,13 +213,14 @@ async function resolveTaskComment(commentId: string, location: BoardLocation = {
   return matches[0]
 }
 
-function makeCard(input: { title: string; description?: string; priority?: CardPriority; assignees?: string[]; labels?: string[] }): KanbanCard {
+function makeCard(input: { title: string; description?: string; priority?: CardPriority; type?: CardType; assignees?: string[]; labels?: string[] }): KanbanCard {
   const labels = input.labels ?? []
   assertNoReservedLabels(labels)
   return {
     title: input.title,
     description: input.description,
     priority: input.priority,
+    type: input.type,
     assignees: input.assignees ?? [],
     labels,
   }
@@ -458,6 +462,7 @@ export function createWikindieMcpServer(user: SessionUser) {
     description: z.string().optional(),
     comments: z.array(taskCommentSchema).optional(),
     priority: prioritySchema.optional(),
+    type: cardTypeSchema.optional(),
     assignees: z.array(z.string()).default([]),
     labels: z.array(z.string()).default([]),
     archived: z.boolean().optional(),
@@ -495,6 +500,7 @@ export function createWikindieMcpServer(user: SessionUser) {
         ...pageIdentifierSchema,
         status: z.string().optional().describe('Column status or column id'),
         priority: prioritySchema.optional(),
+        type: cardTypeSchema.optional(),
         assignee: z.string().optional(),
         label: z.string().optional(),
         includeArchived: z.boolean().default(false).optional(),
@@ -527,6 +533,7 @@ export function createWikindieMcpServer(user: SessionUser) {
         title: z.string().min(1),
         description: z.string().optional(),
         priority: prioritySchema.optional(),
+        type: cardTypeSchema.optional(),
         assignees: z.array(z.string()).default([]).optional(),
         labels: z.array(z.string()).default([]).optional(),
       },
@@ -557,6 +564,7 @@ export function createWikindieMcpServer(user: SessionUser) {
         title: z.string().optional(),
         description: z.string().optional(),
         priority: prioritySchema.optional().nullable(),
+        type: cardTypeSchema.optional().nullable(),
         assignees: z.array(z.string()).optional(),
         labels: z.array(z.string()).optional(),
         archived: z.boolean().optional(),
@@ -564,13 +572,14 @@ export function createWikindieMcpServer(user: SessionUser) {
         index: z.number().int().min(0).optional().describe('Position within target column after move'),
       },
     },
-    async ({ taskId, title, description, priority, assignees, labels, archived, columnId, index, ...location }) => {
+    async ({ taskId, title, description, priority, type, assignees, labels, archived, columnId, index, ...location }) => {
       assertPermission(user, 'write')
       if (labels) assertNoReservedLabels(labels)
       const result = await resolveTaskBoard(taskId, location)
       if (title !== undefined) result.card.title = title
       if (description !== undefined) result.card.description = description || undefined
       if (priority !== undefined) result.card.priority = priority ?? undefined
+      if (type !== undefined) result.card.type = type ?? undefined
       if (assignees !== undefined) result.card.assignees = assignees
       if (labels !== undefined) result.card.labels = labels
       if (archived !== undefined) result.card.archived = archived || undefined
@@ -792,6 +801,7 @@ Once goals are clear:
    - Set a clear, actionable title
    - Add a short description with acceptance criteria
    - Set priority (high/medium/low) based on importance
+   - Set type to "bug" for defects or "task" for everything else
    - Place in the appropriate column (use columnId from the board)
 
 7. Summarize what you created: the project page path, the board path, and the list of tasks with their IDs and priorities.`,
@@ -826,6 +836,7 @@ Once goals are clear:
 Analyze every task and categorize into:
 - **Blocked / stale**: tasks in "in_progress" with no recent activity, or tasks that depend on something unresolved.
 - **High priority unstarted**: high-priority tasks still in backlog/next columns.
+- **Open bugs**: tasks with type "bug" that are not done yet — call these out first.
 - **Ready to start**: tasks whose dependencies appear met and should move to in_progress.
 - **Should reprioritize**: tasks whose priority seems mismatched (e.g. low-priority but blocking other work).
 - **Candidates for archiving**: tasks that look obsolete or completed but not archived.
@@ -833,6 +844,7 @@ Analyze every task and categorize into:
 For each category, list the specific tasks (by id and title) and recommend a concrete action. Use exact tool calls the user can approve:
 - update_task with columnId to move tasks between columns
 - update_task with priority to reprioritize
+- update_task with type "bug" or "task" to correct mislabeled cards
 - archive_task to archive stale/completed tasks
 - add_task_comment to leave triage notes
 

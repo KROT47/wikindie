@@ -178,7 +178,7 @@ Pages are Markdown files. Nested pages can be stored as either `Page.md` leaf fi
 
 Sections are declared in page frontmatter and stored as additional Markdown files, usually under `_sections/` inside the page folder.
 
-Kanban boards are Markdown files with `kanban: true` frontmatter. Each `## Heading` becomes a column and plain bullet items become cards; `kanbanColumns` frontmatter stores stable column IDs and workflow statuses. Completion is represented by moving cards into a column whose status is `done`. Archived cards use a trailing `!archived` metadata token. Labels use `#label`; `#high`, `#medium`, and `#low` are reserved for priority. Cards carry stable UIDs in HTML comments so task comments stay attached across edits and renames.
+Kanban boards are Markdown files with `kanban: true` frontmatter. Each `## Heading` becomes a column and plain bullet items become cards; `kanbanColumns` frontmatter stores stable column IDs and workflow statuses. Completion is represented by moving cards into a column whose status is `done`. Archived cards use a trailing `!archived` metadata token. Labels use `#label`; `#high`, `#medium`, and `#low` are reserved for priority. A trailing `!bug` marks a card as a bug (tasks are the default and carry no token, though `!task` is accepted when reading). Cards carry stable UIDs in HTML comments so task comments stay attached across edits and renames.
 
 ## MCP
 

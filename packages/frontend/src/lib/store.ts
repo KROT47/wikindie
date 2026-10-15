@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { TreeNode } from './api'
-import { defaultTaskFilters, type TaskFilterValues, type TaskPriorityFilter, type TaskStateFilter } from './taskFilters'
+import { defaultTaskFilters, type TaskFilterValues, type TaskPriorityFilter, type TaskStateFilter, type TaskTypeFilter } from './taskFilters'
 
 export type Role = 'admin' | 'editor' | 'readonly'
 
@@ -31,6 +31,7 @@ interface TaskFiltersState extends TaskFilterValues {
   pagePath: string
   setTaskFilterPath: (pagePath: string) => void
   setPriorityFilter: (priorityFilter: TaskPriorityFilter) => void
+  setTypeFilter: (typeFilter: TaskTypeFilter) => void
   setAssigneeFilter: (assigneeFilter: string) => void
   setLabelFilter: (labelFilter: string) => void
   setStateFilter: (stateFilter: TaskStateFilter) => void
@@ -89,6 +90,7 @@ export const useTaskFiltersStore = create<TaskFiltersState>((set) => ({
   ...defaultTaskFilters,
   setTaskFilterPath: (pagePath) => set((state) => (state.pagePath === pagePath ? state : { pagePath, ...defaultTaskFilters })),
   setPriorityFilter: (priorityFilter) => set({ priorityFilter }),
+  setTypeFilter: (typeFilter) => set({ typeFilter }),
   setAssigneeFilter: (assigneeFilter) => set({ assigneeFilter }),
   setLabelFilter: (labelFilter) => set({ labelFilter }),
   setStateFilter: (stateFilter) => set({ stateFilter }),
