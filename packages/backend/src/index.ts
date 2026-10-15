@@ -57,14 +57,30 @@ app.get('*splat', (_req, res) => res.sendFile(path.join(publicDir, 'index.html')
 app.use(errorHandler)
 
 server.on('upgrade', (req, socket, head) => {
-  if (!isAllowedHostHeader(req.headers.host)) return socket.destroy()
+  // Reject with a real HTTP response instead of a bare socket destroy so proxies
+  // report a clean status instead of "socket hang up", and say why in the log.
+  const reject = (status: number, statusText: string, reason: string) => {
+    socket.on('error', () => {})
+    try {
+      if (!socket.destroyed) socket.write(`HTTP/1.1 ${status} ${statusText}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
+    } catch {
+      // The peer may already be gone; nothing to write.
+    }
+    socket.destroy()
+    console.warn(`WebSocket upgrade rejected (${status} ${statusText}): ${reason}`)
+  }
+
+  if (!isAllowedHostHeader(req.headers.host)) return reject(403, 'Forbidden', `host ${req.headers.host ?? 'unknown'} is not allowed`)
 
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
-  if (url.pathname !== '/ws') return socket.destroy()
+  if (url.pathname !== '/ws') return reject(404, 'Not Found', `unexpected path ${url.pathname}`)
 
-  void authenticateToken(url.searchParams.get('token') ?? '')
+  const token = url.searchParams.get('token') ?? ''
+  if (!token) return reject(401, 'Unauthorized', 'missing token')
+
+  void authenticateToken(token)
     .then(() => wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req)))
-    .catch(() => socket.destroy())
+    .catch((error) => reject(401, 'Unauthorized', error instanceof Error ? error.message : 'invalid token'))
 })
 
 startWatcher(wss)
