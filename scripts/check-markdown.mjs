@@ -26,6 +26,7 @@ const icons = await server.ssrLoadModule('/src/lib/icons.ts')
 const paths = await server.ssrLoadModule('/src/lib/paths.ts')
 const wiki = await server.ssrLoadModule('/src/components/editor/wikiReferences.ts')
 const widths = await server.ssrLoadModule('/src/components/editor/imageWidths.ts')
+const anchors = await server.ssrLoadModule('/src/lib/anchors.ts')
 
 after(() => server.close())
 
@@ -208,4 +209,118 @@ test('relative page links round-trip the way the browser resolves /page/<path>',
   assert.equal(wiki.preserveRelativeHref('https://ACTIVITY_LIFECYCLE/STEP'), 'ACTIVITY_LIFECYCLE/STEP')
   assert.equal(wiki.preserveRelativeHref('https://example.com/docs'), 'https://example.com/docs')
   assert.equal(wiki.preserveRelativeHref('mailto:dev@example.com'), 'mailto:dev@example.com')
+})
+
+test('page hrefs keep fragments out of the document path', () => {
+  const parsed = paths.parsePageHref('/page/Guide#installation', 'Notes')
+  assert.equal(parsed.path, 'Guide')
+  assert.equal(parsed.suffix, '#installation')
+  assert.equal(paths.pagePathFromHref('/page/Guide#installation', 'Notes'), 'Guide')
+  assert.equal(paths.pagePathFromHref('#installation', 'Notes'), null)
+  assert.deepEqual(paths.parsePageHref('/page/Guide?tab=1#installation', 'Notes'), {
+    path: 'Guide',
+    suffix: '?tab=1#installation',
+  })
+  assert.equal(paths.parsePageHref('/page/Workspace#wikindie-ref', 'Notes').suffix, '')
+  assert.equal(paths.parsePageHref('#installation', 'Notes'), null)
+
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[Установка](/page/Guide#installation)', 'Notes'),
+    '[Установка](./Guide#installation)',
+  )
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[Установка](./Guide#installation)', 'Notes'),
+    '[Установка](./Guide#installation)',
+  )
+  assert.equal(
+    wiki.protectWikiReferences('[[Guide#installation|Установка]]', 'Notes'),
+    '[Установка](./Guide%23installation)',
+  )
+
+  assert.equal(paths.previewNavigationHref('#installation', 'Guide'), '/page/Guide#installation')
+  assert.equal(paths.previewNavigationHref('./Other#setup', 'Guide'), '/page/Other#setup')
+  assert.equal(paths.previewNavigationHref('/page/Guide#installation', 'Notes'), '/page/Guide#installation')
+  const cyrillicLink = paths.previewNavigationHref('../Planning/Decision%20Log#установка', 'Workspace/Projects')
+  assert.equal(cyrillicLink.split('#')[0], '/page/Planning/Decision%20Log')
+  assert.equal(anchors.decodeFragment(new URL(cyrillicLink, 'http://localhost').hash), 'установка')
+  assert.equal(paths.previewNavigationHref('#installation', ''), null)
+  assert.equal(paths.safeInternalReturnPath('/page/Guide#installation'), '/page/Guide#installation')
+  assert.equal(paths.safeInternalReturnPath('https://evil.example/page/Guide'), '/')
+  assert.equal(paths.safeInternalReturnPath('//evil.example'), '/')
+  assert.equal(paths.safeInternalReturnPath('/\\evil'), '/')
+
+  const href = anchors.anchorHref('Planning/Decision Log', 'установка', 'http://localhost:5173')
+  const url = new URL(href)
+  assert.equal(url.pathname, '/page/Planning/Decision%20Log')
+  assert.equal(anchors.decodeFragment(url.hash), 'установка')
+  assert.equal(anchors.decodeFragment('#installation'), 'installation')
+  assert.equal(anchors.decodeFragment(''), '')
+  assert.equal(anchors.decodeFragment('#%'), '%')
+})
+
+test('heading slugs stay unique across the page and sections', () => {
+  const source = [
+    '# Installation',
+    '',
+    '## Hello, world!',
+    '',
+    '# Use `npm` **now**',
+    '',
+    '# See [the guide](/page/Guide#installation)',
+    '',
+    '# См. [[Guide|Установка]]',
+    '',
+    '# Hello :idea:',
+    '',
+    '```mermaid',
+    'flowchart TD',
+    '  A["# Not a heading"] --> B',
+    '```',
+    '',
+    'Inline `# not a heading`.',
+    '',
+    '# Установка',
+    '',
+    '# Установка',
+    '',
+    '#',
+    '',
+    '# !!!',
+    '',
+    '# Wikindie ref',
+  ].join('\n')
+
+  const plan = anchors.assignPageAnchors(source, [
+    { path: '_sections/start-here.md', content: '# Section start here\n\n# Intro\n' },
+    { path: '_sections/start-here.md', content: '# Notes\n' },
+    { path: '_sections/операции.md', content: '# Операции\n' },
+  ])
+
+  assert.deepEqual(plan.bodyHeadingIds, [
+    'installation',
+    'hello-world',
+    'use-npm-now',
+    'see-the-guide',
+    'см-установка',
+    'hello-',
+    'установка',
+    'установка-1',
+    'heading',
+    'heading-1',
+    'wikindie-ref-1',
+  ])
+  assert.deepEqual(anchors.stampedHeadingIds(source, plan.bodyHeadingIds), plan.bodyHeadingIds)
+  assert.deepEqual(plan.sections.map((section) => section.headingIds), [
+    ['section-start-here', 'intro'],
+    ['notes'],
+    ['операции'],
+  ])
+  assert.deepEqual(plan.sections.map((section) => section.anchorId), [
+    'section-start-here-1',
+    'section-start-here-2',
+    'section-операции',
+  ])
+  assert.equal(anchors.sectionAnchorBase('_sections/start-here.md'), 'section-start-here')
+  assert.equal(anchors.sectionAnchorBase('_sections/My Notes.md'), 'section-My-Notes')
+  assert.equal(new Set(plan.bodyHeadingIds).has('wikindie-ref'), false)
 })

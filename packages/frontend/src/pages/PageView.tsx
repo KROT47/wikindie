@@ -24,6 +24,7 @@ export function PageView() {
   const path = useMemo(() => paramToPath(params['*']), [params])
   const [page, setPage] = useState<PageBundle | null>(null)
   const [error, setError] = useState('')
+  const [anchorLoad, setAnchorLoad] = useState({ path: '', id: 0 })
   const localEditingRef = useRef(false)
   const setLocalEditing = useCallback((active: boolean) => {
     localEditingRef.current = active
@@ -42,6 +43,7 @@ export function PageView() {
         if (cancelled) return
         pageCache.set(path, result)
         setPage(result)
+        setAnchorLoad((current) => ({ path, id: current.id + 1 }))
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load page'))
 
@@ -78,5 +80,5 @@ export function PageView() {
       />
     )
   }
-  return <Editor page={page} onEditingChange={setLocalEditing} onPageChange={(next) => { pageCache.set(next.path, next); setPage(next) }} />
+  return <Editor key={page.path} page={page} anchorLoad={anchorLoad} onEditingChange={setLocalEditing} onPageChange={(next) => { pageCache.set(next.path, next); setPage(next) }} />
 }

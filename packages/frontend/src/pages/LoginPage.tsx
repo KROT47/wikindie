@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import logoUrl from '../assets/wikindie_logo.png'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { PasswordInput } from '../components/ui/PasswordInput'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { api } from '../lib/api'
+import { safeInternalReturnPath } from '../lib/paths'
 import { useAuthStore, useRuntimeConfigStore } from '../lib/store'
 
 const features = [
@@ -19,11 +20,17 @@ export function LoginPage() {
   const token = useAuthStore((state) => state.token)
   const setSession = useAuthStore((state) => state.setSession)
   const publicReadonly = useRuntimeConfigStore((state) => state.config?.publicReadonly)
+  const location = useLocation()
   const [username, setUsername] = useState(import.meta.env.DEV ? 'dev' : '')
   const [password, setPassword] = useState(import.meta.env.DEV ? 'dev' : '')
   const [error, setError] = useState('')
+  const destination = safeInternalReturnPath(
+    location.state && typeof location.state === 'object' && 'from' in location.state
+      ? (location.state as { from?: unknown }).from
+      : undefined,
+  )
 
-  if (token) return <Navigate to="/" replace />
+  if (token) return <Navigate to={destination} replace />
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()

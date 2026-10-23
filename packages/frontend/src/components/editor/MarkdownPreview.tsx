@@ -1,22 +1,24 @@
-import { Children, isValidElement, useEffect, useState, type ReactNode } from 'react'
+import { Children, isValidElement, useEffect, useMemo, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api, isAttachmentUrl } from '../../lib/api'
+import { createRemarkHeadingIds } from '../../lib/anchors'
 import { resolveAttachmentObjectUrl } from '../../lib/attachmentCache'
+import { previewNavigationHref } from '../../lib/paths'
 import { parseImageWidth } from './imageWidths'
 import { MermaidDiagram } from './MermaidDiagram'
-import { renderIconShortcodes } from '../../lib/icons'
-import { replaceOutsideCode } from '../../lib/markdownSegments'
-import { pageUrl } from '../../lib/paths'
+import { CopyAnchorButton } from './CopyAnchorButton'
+import { preparePreviewMarkdown } from './wikiReferences'
 
 function isExternalUrl(href: string) {
   return /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')
 }
 
-function internalPathFor(href: string): string | null {
+function internalPathFor(href: string, pagePath: string): string | null {
+  const preview = previewNavigationHref(href, pagePath)
+  if (preview) return preview
   if (!href) return null
-  if (href.startsWith('/page/')) return href
   try {
     const url = new URL(href, window.location.origin)
     if (url.origin === window.location.origin && url.pathname.startsWith('/page/')) {
@@ -30,54 +32,6 @@ function internalPathFor(href: string): string | null {
   const malformedProtocolPath = href.match(/^[a-z][a-z0-9+.-]*:\/\/(\/page\/.*)$/i)
   if (malformedProtocolPath) return malformedProtocolPath[1]
   return null
-}
-
-function escapeMarkdownLinkText(value: string) {
-  return value.replace(/[\\[\]]/g, '\\$&')
-}
-
-function renderPageReference(value: string) {
-  const [rawPath, ...rawLabel] = value.split('|')
-  const path = rawPath.trim()
-  if (!path) return `[[${value}]]`
-  const label = rawLabel.length ? rawLabel.join('|').trim() || path : path
-  return `[${escapeMarkdownLinkText(label)}](${pageUrl(path)})`
-}
-
-function renderReferencesInLine(line: string) {
-  let result = ''
-  let index = 0
-
-  while (index < line.length) {
-    if (line[index] === '`') {
-      const tickStart = index
-      while (index < line.length && line[index] === '`') index++
-      const ticks = line.slice(tickStart, index)
-      const codeEnd = line.indexOf(ticks, index)
-      if (codeEnd < 0) return result + line.slice(tickStart)
-      result += line.slice(tickStart, codeEnd + ticks.length)
-      index = codeEnd + ticks.length
-      continue
-    }
-
-    if (line.startsWith('[[', index)) {
-      const end = line.indexOf(']]', index + 2)
-      if (end >= 0) {
-        result += renderPageReference(line.slice(index + 2, end))
-        index = end + 2
-        continue
-      }
-    }
-
-    result += line[index]
-    index++
-  }
-
-  return result
-}
-
-function renderPageReferences(value: string) {
-  return replaceOutsideCode(value, (segment) => segment.split('\n').map(renderReferencesInLine).join('\n'))
 }
 
 function filenameFromUrl(url: string) {
@@ -158,41 +112,85 @@ function AttachmentLink({ href, children, ...props }: React.AnchorHTMLAttributes
   return <a href={href} onClick={handleClick} {...props}>{children}</a>
 }
 
+type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
+
+function MarkdownHeading({
+  level,
+  pagePath,
+  children,
+  node: _node,
+  ...props
+}: ComponentPropsWithoutRef<'h2'> & {
+  level: HeadingLevel
+  pagePath: string
+  node?: unknown
+}) {
+  const Tag = `h${level}` as 'h2'
+  const anchorId = typeof props.id === 'string' && props.id ? props.id : undefined
+  const name = nodeText(children).trim() || 'heading'
+  return (
+    <Tag {...props} id={anchorId} className={`group scroll-my-0 ${props.className ?? ''}`.trim()}>
+      {children}
+      {pagePath && anchorId ? <CopyAnchorButton variant="heading" pagePath={pagePath} anchorId={anchorId} name={name} /> : null}
+    </Tag>
+  )
+}
+
+function headingComponent(level: HeadingLevel, pagePath: string) {
+  return function Heading(props: ComponentPropsWithoutRef<'h2'> & { node?: unknown }) {
+    return <MarkdownHeading level={level} pagePath={pagePath} {...props} />
+  }
+}
+
 export function MarkdownPreview({
   content,
   compact = false,
   frameless = false,
+  pagePath = '',
+  headingIds,
 }: {
   content: string
   compact?: boolean
   frameless?: boolean
+  pagePath?: string
+  headingIds?: readonly string[]
 }) {
+  const source = useMemo(() => preparePreviewMarkdown(content), [content])
+  const remarkPlugins = useMemo(
+    () => (headingIds ? [remarkGfm, createRemarkHeadingIds(headingIds)] : [remarkGfm]),
+    [headingIds],
+  )
+  const components = useMemo(() => ({
+    h1: headingComponent(1, pagePath),
+    h2: headingComponent(2, pagePath),
+    h3: headingComponent(3, pagePath),
+    h4: headingComponent(4, pagePath),
+    h5: headingComponent(5, pagePath),
+    h6: headingComponent(6, pagePath),
+    a: ({ href = '', children, ...props }: ComponentPropsWithoutRef<'a'>) => {
+      const internal = internalPathFor(href, pagePath)
+      if (internal) return <Link to={internal}>{children}</Link>
+      if (isAttachmentUrl(href)) return <AttachmentLink href={href} {...props}>{children}</AttachmentLink>
+      if (isExternalUrl(href)) return <a href={href} target="_blank" rel="noreferrer" {...props}>{children}</a>
+      return <a href={href} {...props}>{children}</a>
+    },
+    img: ({ src = '', alt = '', ...props }: ComponentPropsWithoutRef<'img'>) => <AttachmentImage src={src} alt={alt} {...props} />,
+    pre: ({ children }: { children?: ReactNode }) => {
+      const mermaid = mermaidSource(children)
+      if (mermaid != null) return <MermaidDiagram source={mermaid} />
+      return <pre>{children}</pre>
+    },
+    table: ({ children, ...props }: ComponentPropsWithoutRef<'table'>) => (
+      <div className="markdown-table-scroll">
+        <table {...props}>{children}</table>
+      </div>
+    ),
+  }), [pagePath])
+
   return (
     <article className={`markdown-preview ${compact ? 'markdown-preview-compact text-sm' : ''} text-text ${frameless ? '' : 'rounded-md border border-border bg-surface p-5'}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ href = '', children, ...props }) => {
-            const internal = internalPathFor(href)
-            if (internal) return <Link to={internal}>{children}</Link>
-            if (isAttachmentUrl(href)) return <AttachmentLink href={href} {...props}>{children}</AttachmentLink>
-            if (isExternalUrl(href)) return <a href={href} target="_blank" rel="noreferrer" {...props}>{children}</a>
-            return <a href={href} {...props}>{children}</a>
-          },
-          img: ({ src = '', alt = '', ...props }) => <AttachmentImage src={src} alt={alt} {...props} />,
-          pre: ({ children }) => {
-            const source = mermaidSource(children)
-            if (source != null) return <MermaidDiagram source={source} />
-            return <pre>{children}</pre>
-          },
-          table: ({ children, ...props }) => (
-            <div className="markdown-table-scroll">
-              <table {...props}>{children}</table>
-            </div>
-          ),
-        }}
-      >
-        {renderPageReferences(renderIconShortcodes(content))}
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+        {source}
       </ReactMarkdown>
     </article>
   )

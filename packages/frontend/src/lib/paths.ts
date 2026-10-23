@@ -15,7 +15,8 @@ export function pagePathFromLocation(pathname: string) {
 
 const PAGE_LINK_ORIGIN = 'http://wikindie.local'
 const PAGE_LINK_SCHEME = /^[a-z][a-z0-9+.-]*:/i
-const WIKI_REFERENCE_HASH = '#wikindie-ref'
+// Sentinel stored on editor links in older documents. It is not a heading anchor.
+export const WIKI_REFERENCE_HASH = '#wikindie-ref'
 
 function pageSegments(pagePath: string) {
   return pagePath.split('/').filter(Boolean)
@@ -79,6 +80,26 @@ export function parsePageHref(href: string, fromPagePath: string): ParsedPageHre
 
 export function pagePathFromHref(href: string, fromPagePath: string) {
   return parsePageHref(href, fromPagePath)?.path ?? null
+}
+
+// Preview navigation for a markdown href. Fragments stay on the suffix and are
+// never part of the page path. Hash-only links stay on `pagePath`.
+export function previewNavigationHref(href: string, pagePath: string): string | null {
+  if (!href) return null
+  if (pagePath && href.startsWith('#')) return `${pageUrl(pagePath)}${href}`
+  if (pagePath) {
+    const parsed = parsePageHref(href, pagePath)
+    if (parsed) return `${pageUrl(parsed.path)}${parsed.suffix}`
+  }
+  if (href.startsWith('/page/')) return href
+  return null
+}
+
+export function safeInternalReturnPath(value: unknown) {
+  if (typeof value !== 'string') return '/'
+  if (!value.startsWith('/') || value.startsWith('//')) return '/'
+  if (/[\u0000-\u001F\\]/.test(value) || value.includes('://')) return '/'
+  return value
 }
 
 export function pageNameFromPath(pagePath: string) {

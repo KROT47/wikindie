@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppLayout } from './components/layout/AppLayout'
 import { api } from './lib/api'
 import { pageUrl } from './lib/paths'
@@ -23,7 +23,10 @@ function LazyRoute({ children }: { children: ReactNode }) {
 function Protected({ children }: { children: ReactNode }) {
   const token = useAuthStore((state) => state.token)
   const config = useRuntimeConfigStore((state) => state.config)
-  return token || config?.publicReadonly ? children : <Navigate to="/login" replace />
+  const location = useLocation()
+  if (token || config?.publicReadonly) return children
+  const from = `${location.pathname}${location.search}${location.hash}`
+  return <Navigate to="/login" replace state={{ from }} />
 }
 
 function SignedIn({ children }: { children: ReactNode }) {

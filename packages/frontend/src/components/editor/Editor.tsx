@@ -1,7 +1,8 @@
 import { ArrowLeft, CheckCircle2, ChevronDown, ChevronRight, Eye, ListChecks, Pencil, Plus, Save, Settings } from 'lucide-react'
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, type PageBundle, type PageSection } from '../../lib/api'
+import { assignPageAnchors, decodeFragment, scrollAnchorIntoView } from '../../lib/anchors'
 import { useMobileTaskPanel } from '../layout/AppLayout'
 import { breadcrumbsFromPath, findTreeNode, goBack, pageNameFromPath, pageUrl } from '../../lib/paths'
 import { canDelete, canWrite, useAuthStore, useFilesStore } from '../../lib/store'
@@ -9,6 +10,7 @@ import { ActionMenu, ActionMenuItem } from '../ui/ActionMenu'
 import { Button } from '../ui/Button'
 import { IconPicker } from '../ui/IconPicker'
 import { PageIcon } from '../ui/PageIcon'
+import { CopyAnchorButton } from './CopyAnchorButton'
 import { MarkdownPreview } from './MarkdownPreview'
 
 function slugify(value: string) {
@@ -56,14 +58,21 @@ function BlockEditorFallback({ className }: { className: string }) {
 
 export function Editor({
   page,
+  anchorLoad,
   onEditingChange,
   onPageChange,
 }: {
   page: PageBundle
+  anchorLoad: { path: string, id: number }
   onEditingChange?: (active: boolean) => void
   onPageChange: (page: PageBundle) => void
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const lastNav = useRef('')
+  const scrolledKey = useRef('')
   const tree = useFilesStore((state) => state.tree)
   const role = useAuthStore((state) => state.role)
   const mayWrite = canWrite(role)
@@ -108,6 +117,104 @@ export function Editor({
     const sectionContent = Object.values(sectionDrafts).map((section) => section.content)
     return textStats([editing ? content : savedContent, ...sectionContent].join('\n\n'))
   }, [content, editing, savedContent, sectionDrafts])
+  const anchorSignature = [
+    savedContent,
+    ...page.sections.map((section) => {
+      const source = editingSection === section.path
+        ? section.content
+        : (sectionDrafts[section.path]?.content ?? section.content)
+      return `${section.path}\0${source}`
+    }),
+  ].join('\0')
+  const anchorPlan = useMemo(
+    () => assignPageAnchors(savedContent, page.sections.map((section) => ({
+      path: section.path,
+      content: editingSection === section.path
+        ? section.content
+        : (sectionDrafts[section.path]?.content ?? section.content),
+    }))),
+    // anchorSignature is the serialized form of the strings read above.
+    [anchorSignature],
+  )
+  const sectionsSynced = page.sections.every((section) => {
+    if (section.path === editingSection) return true
+    const draft = sectionDrafts[section.path]
+    if (!draft) return true
+    return draft.content === section.content
+  })
+
+  useEffect(() => {
+    const fragment = decodeFragment(location.hash)
+    const navKey = `${page.path}#${fragment}`
+    if (!fragment) {
+      lastNav.current = navKey
+      return
+    }
+    if (lastNav.current === navKey && scrolledKey.current === navKey) return
+    if (anchorLoad.path !== page.path || anchorLoad.id === 0) return
+
+    const root = scrollRef.current
+    const target = document.getElementById(fragment)
+    const visible = Boolean(root && target && root.contains(target))
+    const settled = savedContent === page.content && sectionsSynced
+    if (!visible || !root || !target) {
+      if (!settled || editing || editingSection) return
+      lastNav.current = navKey
+      scrolledKey.current = navKey
+      return
+    }
+
+    let suppressScroll = false
+    let released = false
+    const align = () => {
+      if (released) return
+      if (!scrollAnchorIntoView(root, target)) return
+      suppressScroll = true
+      window.requestAnimationFrame(() => { suppressScroll = false })
+    }
+    // The browser scrolls a fragment to the top of the window. The page column
+    // starts below the editor header, so correct that scroll until the reader moves.
+    const onScroll = () => {
+      if (suppressScroll || released) return
+      align()
+    }
+    align()
+    window.requestAnimationFrame(() => {
+      align()
+      window.requestAnimationFrame(align)
+    })
+    if (settled && !editing && !editingSection) {
+      lastNav.current = navKey
+      scrolledKey.current = navKey
+    }
+
+    const contentNode = contentRef.current
+    if (!contentNode) return
+    const observer = new ResizeObserver(() => {
+      if (released || scrolledKey.current !== navKey) return
+      align()
+    })
+    observer.observe(contentNode)
+    root.addEventListener('scroll', onScroll, { passive: true })
+    const release = () => {
+      released = true
+      observer.disconnect()
+      root.removeEventListener('scroll', onScroll)
+    }
+    root.addEventListener('pointerdown', release)
+    root.addEventListener('keydown', release)
+    root.addEventListener('wheel', release, { passive: true })
+    root.addEventListener('touchstart', release, { passive: true })
+    return () => {
+      released = true
+      observer.disconnect()
+      root.removeEventListener('scroll', onScroll)
+      root.removeEventListener('pointerdown', release)
+      root.removeEventListener('keydown', release)
+      root.removeEventListener('wheel', release)
+      root.removeEventListener('touchstart', release)
+    }
+  }, [anchorLoad, editing, editingSection, location.hash, page.content, page.path, savedContent, sectionsSynced])
   const statusLabel = mayWrite ? (status === 'dirty' ? 'Unsaved changes' : status === 'saving' ? 'Saving...' : 'Saved') : 'Read only'
 
   useEffect(() => {
@@ -337,8 +444,8 @@ export function Editor({
         </div>
       </header>
 
-      <div className="workspace-scroll min-h-0 flex-1 overflow-y-auto bg-content">
-        <div className="mx-auto w-full max-w-5xl p-5 md:p-10">
+      <div ref={scrollRef} className="workspace-scroll min-h-0 flex-1 overflow-y-auto bg-content">
+        <div ref={contentRef} className="mx-auto w-full max-w-5xl p-5 md:p-10">
           {externalChange && <div className="mb-6 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">This page changed on disk while you had local edits.</div>}
 
           {mayWrite && metaEditing && (
@@ -438,7 +545,7 @@ export function Editor({
             </div>
           ) : (
             <div className="mb-10">
-              <MarkdownPreview content={savedContent} frameless />
+              <MarkdownPreview content={savedContent} frameless pagePath={page.path} headingIds={anchorPlan.bodyHeadingIds} />
             </div>
           )}
 
@@ -467,12 +574,13 @@ export function Editor({
         )}
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {page.sections.map((section) => {
+          {page.sections.map((section, index) => {
             const draft = sectionDrafts[section.path] ?? { title: section.title, content: section.content }
             const sectionEditing = editingSection === section.path
+            const sectionAnchor = anchorPlan.sections[index]
 
             return (
-              <article key={section.path} className="rounded-md border border-border bg-card p-5 shadow-sm shadow-shadow">
+              <article id={sectionAnchor?.anchorId} key={section.path} className="rounded-md border border-border bg-card p-5 shadow-sm shadow-shadow">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   {mayWrite && sectionEditing ? (
                     <input
@@ -484,6 +592,14 @@ export function Editor({
                     <h4 className="font-semibold">{draft.title}</h4>
                   )}
                   <div className="flex gap-2">
+                    {sectionAnchor ? (
+                      <CopyAnchorButton
+                        variant="section"
+                        pagePath={page.path}
+                        anchorId={sectionAnchor.anchorId}
+                        name={draft.title.trim() || 'section'}
+                      />
+                    ) : null}
                     {mayWrite && sectionEditing ? (
                       <>
                         <Button onClick={() => void saveSection(section)}>Save</Button>
@@ -508,7 +624,7 @@ export function Editor({
                     </Suspense>
                   </div>
                 ) : (
-                  <MarkdownPreview content={draft.content} frameless />
+                  <MarkdownPreview content={draft.content} frameless pagePath={page.path} headingIds={sectionAnchor?.headingIds} />
                 )}
               </article>
             )

@@ -124,6 +124,26 @@ WIKINDIE_URL=http://localhost:5173 node scripts/check-mermaid.mjs
 
 `check-mermaid.mjs` needs the dev servers and Playwright. It uses Playwright's Chromium, or system Chrome when that browser is not installed. `scripts/fixtures/mermaid-acceptance.md` is the manual sample; the script copies it into the local workspace, which is not committed.
 
+## Links to headings and sections
+
+A preview heading gets an id from the GitHub heading algorithm: lowercase, punctuation removed, Unicode letters kept, spaces turned into hyphens. The id is not written into the Markdown file. Repeated headings on the same page, including headings inside sections, become `installation`, `installation-1`, `installation-2`. An empty heading becomes `heading`. Changing the heading text changes its id.
+
+```md
+[Installation](/page/Guide#installation)
+[Installation](./Guide#installation)
+[Installation](#installation)
+```
+
+The editor keeps the fragment when it saves a link. `[[path|label]]` does not take a fragment; `#` stays part of the wikilink path.
+
+Each section file has its own anchor, `section-` plus the file stem from its stored path. `_sections/start-here.md` is `#section-start-here`. Renaming the section title does not change that anchor. Replacing the section path does. If a heading already uses the same id, the section anchor gains `-1`, `-2`, and so on.
+
+```md
+[Start here](/page/Guide#section-start-here)
+```
+
+Opening any of these URLs loads the page and scrolls the page column so the heading or section sits at the top of that column. A target in the last screen stops at the end of the content. The **Copy link** control is on preview headings and on each section. It is not shown while that body or section is in the block editor, and kanban comments do not get anchors.
+
 ## Stack
 
 - React 19, Vite 7, Tailwind CSS 4, Zustand, React Router, TipTap, BlockNote.
@@ -245,7 +265,7 @@ scripts            Repository maintenance and screenshot scripts
 | `npm run start` | Start the built backend, serving the copied frontend assets. |
 | `npm run typecheck` | Type-check backend and frontend workspaces. |
 | `npm run screenshots` | Capture marketing/launch screenshots via Playwright (requires `playwright` installed; see `scripts/screenshots.mjs`). |
-| `node scripts/check-markdown.mjs` | Check that wiki links, icon shortcodes, and image widths leave code blocks unchanged. |
+| `node scripts/check-markdown.mjs` | Check wiki links, heading anchors, icon shortcodes, and image widths. |
 | `node scripts/check-mermaid.mjs` | Render Mermaid against a running dev server. Set `WIKINDIE_URL` when the app is not on port 5173. |
 
 ## Status
