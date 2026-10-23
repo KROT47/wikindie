@@ -4,7 +4,7 @@ import { filterSuggestionItems } from '@blocknote/core'
 import type { DefaultReactSuggestionItem } from '@blocknote/react'
 import type { TreeNode } from '../../lib/api'
 import { resolveWikiIcon, isRawEmoji } from '../../lib/icons'
-import { wikiReferenceHref } from './wikiReferences'
+import { relativePageHref } from '../../lib/paths'
 
 type FlatPage = { path: string; title: string; icon?: string; type: 'page' | 'board' }
 
@@ -25,9 +25,9 @@ function pageGlyph(page: FlatPage): string {
   return resolveWikiIcon(fallback)?.glyph ?? '📄'
 }
 
-function insertPageLink(editor: BlockNoteEditor<any, any, any>, page: FlatPage) {
+function insertPageLink(editor: BlockNoteEditor<any, any, any>, page: FlatPage, pagePath: string) {
   editor.insertInlineContent([
-    { type: 'link', href: wikiReferenceHref(page.path), content: page.title },
+    { type: 'link', href: relativePageHref(pagePath, page.path), content: page.title },
     ' ',
   ])
 }
@@ -36,6 +36,7 @@ export function pagePickerItems(
   editor: BlockNoteEditor<any, any, any>,
   tree: TreeNode[],
   query: string,
+  pagePath: string,
 ): DefaultReactSuggestionItem[] {
   const pages = flattenTree(tree)
   const items = pages.map<DefaultReactSuggestionItem>((page) => ({
@@ -44,7 +45,7 @@ export function pagePickerItems(
     aliases: [page.path, ...page.path.split('/')],
     group: page.type === 'board' ? 'Boards' : 'Pages',
     icon: createElement('span', { className: 'text-base leading-none' }, pageGlyph(page)),
-    onItemClick: () => insertPageLink(editor, page),
+    onItemClick: () => insertPageLink(editor, page, pagePath),
   }))
   return filterSuggestionItems(items, query)
 }

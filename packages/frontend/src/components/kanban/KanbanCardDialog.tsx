@@ -57,6 +57,7 @@ export function KanbanCardDialog({
   onUpdateComment,
   onDeleteComment,
   open,
+  pagePath,
   showAssignees,
   users,
 }: {
@@ -69,6 +70,7 @@ export function KanbanCardDialog({
   onUpdateComment?: (commentId: string, body: string) => Promise<void>
   onDeleteComment?: (commentId: string) => Promise<void>
   open: boolean
+  pagePath: string
   showAssignees: boolean
   users: string[]
 }) {
@@ -351,6 +353,7 @@ export function KanbanCardDialog({
                 className="min-h-[260px] w-full"
                 editable={editable}
                 onChange={setDescription}
+                pagePath={pagePath}
                 value={description}
               />
             </Suspense>

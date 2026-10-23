@@ -471,6 +471,7 @@ export function KanbanBoard({
                 key={`${column.id}-${columnIndex}`}
                 column={column}
                 columnIndex={columnIndex}
+                pagePath={path}
                 board={board}
                 editable={mayWrite}
                 availableLabels={labelOptions}
@@ -488,7 +489,7 @@ export function KanbanBoard({
           </div>
         </div>
       ) : (
-        <KanbanTableView board={board} editable={mayWrite} availableLabels={labelOptions} rows={tableCards} showAssignees={showAssignees} users={users} onUpdate={update} onAddComment={addComment} onUpdateComment={updateComment} onDeleteComment={deleteComment} />
+        <KanbanTableView board={board} editable={mayWrite} availableLabels={labelOptions} pagePath={path} rows={tableCards} showAssignees={showAssignees} users={users} onUpdate={update} onAddComment={addComment} onUpdateComment={updateComment} onDeleteComment={deleteComment} />
       )}
       {shownCardCount === 0 && (
         <div className="mt-5 rounded-md border border-dashed border-border bg-surface/70 p-6 text-center text-sm text-text-muted">
@@ -519,6 +520,7 @@ function KanbanTableView({
   board,
   editable,
   availableLabels,
+  pagePath,
   rows,
   showAssignees,
   users,
@@ -530,6 +532,7 @@ function KanbanTableView({
   board: Board
   editable: boolean
   availableLabels: string[]
+  pagePath: string
   rows: Array<{ card: Card; cardIndex: number; column: Board['columns'][number]; columnIndex: number }>
   showAssignees: boolean
   users: string[]
@@ -747,6 +750,7 @@ function KanbanTableView({
           editable={editable}
           availableLabels={availableLabels}
           onClose={() => setEditing(null)}
+          pagePath={pagePath}
           onAddComment={(body) => onAddComment({ taskId: editingCard.id, cardUid: editingCard.uid, columnId: editingColumn.id, index: editing.cardIndex, body })}
           onUpdateComment={onUpdateComment}
           onDeleteComment={onDeleteComment}

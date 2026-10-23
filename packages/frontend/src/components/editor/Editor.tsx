@@ -426,6 +426,7 @@ export function Editor({
               <Suspense fallback={<BlockEditorFallback className="min-h-[52vh] w-full" />}>
                 <BlockEditor
                   pageId={page.id}
+                  pagePath={page.path}
                   className="min-h-[52vh] w-full"
                   value={content}
                   onChange={(md) => {
@@ -499,6 +500,7 @@ export function Editor({
                     <Suspense fallback={<BlockEditorFallback className="min-h-[180px] w-full" />}>
                       <BlockEditor
                         pageId={page.id}
+                        pagePath={page.path}
                         className="min-h-[180px] w-full"
                         value={draft.content}
                         onChange={(md) => setSectionDrafts((prev) => ({ ...prev, [section.path]: { ...draft, content: md } }))}

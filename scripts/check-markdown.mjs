@@ -23,6 +23,7 @@ const server = await createServer({
 })
 
 const icons = await server.ssrLoadModule('/src/lib/icons.ts')
+const paths = await server.ssrLoadModule('/src/lib/paths.ts')
 const wiki = await server.ssrLoadModule('/src/components/editor/wikiReferences.ts')
 const widths = await server.ssrLoadModule('/src/components/editor/imageWidths.ts')
 
@@ -89,15 +90,17 @@ test('wiki links inside backticks, tildes, quotes, and lists stay literal', () =
     '    :idea:',
   ].join('\n')
 
-  const protectedMarkdown = wiki.protectWikiReferences(source)
-  assert.match(protectedMarkdown, /See \[Workspace\]\(\/page\/Workspace#wikindie-ref\)/)
-  assert.match(protectedMarkdown, /\[Вики\]\(\/page\/Workspace#wikindie-ref\)/)
+  const protectedMarkdown = wiki.protectWikiReferences(source, 'Notes')
+  assert.match(protectedMarkdown, /See \[Workspace\]\(\.\/Workspace\)/)
+  assert.match(protectedMarkdown, /\[Вики\]\(\.\/Workspace\)/)
   assert.match(protectedMarkdown, /Q\["\[\[Workspace\]\]"\]/)
   assert.match(protectedMarkdown, /L\["\[\[Workspace\|Label\]\]"\]/)
+  assert.doesNotMatch(protectedMarkdown, /#wikindie-ref/)
+  assert.equal(wiki.restoreProtectedWikiReferences(protectedMarkdown, 'Notes'), protectedMarkdown)
 
   const indented = 'Intro [[Workspace]]\n\n    [[Workspace]]\n    :idea:\n'
-  const protectedIndent = wiki.protectWikiReferences(indented)
-  assert.match(protectedIndent, /^Intro \[Workspace\]\(\/page\/Workspace#wikindie-ref\)/m)
+  const protectedIndent = wiki.protectWikiReferences(indented, 'Notes')
+  assert.match(protectedIndent, /^Intro \[Workspace\]\(\.\/Workspace\)/m)
   assert.match(protectedIndent, /^ {4}\[\[Workspace\]\]$/m)
   const iconsInIndent = icons.renderIconShortcodes(indented)
   assert.match(iconsInIndent, /^ {4}:idea:$/m)
@@ -125,17 +128,84 @@ test('image widths and restored wiki links skip every code span', () => {
   assert.match(widened, /!\[outside\]\(https:\/\/example\.com\/outside\.png#w=320\)/)
   assert.equal(widened.split('#w=320').length - 1, 1)
 
-  const restored = wiki.restoreProtectedWikiReferences(source)
-  assert.match(restored, /Look at \[\[Workspace\]\]\./)
+  const restored = wiki.restoreProtectedWikiReferences(source, 'Notes')
+  assert.match(restored, /Look at \[Workspace\]\(\.\/Workspace\)\./)
+  assert.doesNotMatch(restored, /\[\[Workspace\]\]/)
   assert.match(restored, /B\["\[Workspace\]\(\/page\/Workspace#wikindie-ref\)"\]/)
   assert.match(restored, /> \[Workspace\]\(\/page\/Workspace#wikindie-ref\)/)
+  assert.equal(wiki.restoreProtectedWikiReferences(restored, 'Notes'), restored)
 })
 
 test('ordinary links and images outside code still convert', () => {
   const source = 'Visit [[Workspace/Projects]] and ![shot](' + outsideImage + ').'
-  const protectedMarkdown = wiki.protectWikiReferences(source)
-  assert.match(protectedMarkdown, /\[Workspace\/Projects\]\(\/page\/Workspace\/Projects#wikindie-ref\)/)
+  const protectedMarkdown = wiki.protectWikiReferences(source, 'Notes')
+  assert.match(protectedMarkdown, /\[Workspace\/Projects\]\(Workspace\/Projects\)/)
   const widened = widths.applyImageWidths(source, new Map([[outsideImage, 80]]))
   assert.match(widened, /!\[shot\]\(https:\/\/example\.com\/outside\.png#w=80\)/)
   assert.equal(icons.renderIconShortcodes('A :idea: B'), `A ${idea} B`)
+})
+
+test('relative page links round-trip the way the browser resolves /page/<path>', () => {
+  const cases = [
+    ['domain/ACTIVITY_LIFECYCLE', 'domain/GAME_PROGRESSION', './GAME_PROGRESSION'],
+    ['domain/ACTIVITY_LIFECYCLE', 'domain/ACTIVITY_LIFECYCLE/STEP', 'ACTIVITY_LIFECYCLE/STEP'],
+    ['domain/ACTIVITY_LIFECYCLE/STEP', 'domain/ACTIVITY_LIFECYCLE', '../ACTIVITY_LIFECYCLE'],
+    ['domain/ACTIVITY_LIFECYCLE', 'Planning/Decision Log', '../Planning/Decision%20Log'],
+    ['Planning/Decision Log', 'domain/ACTIVITY_LIFECYCLE', '../domain/ACTIVITY_LIFECYCLE'],
+    ['Planning/Notes', 'Planning/Decision Log', './Decision%20Log'],
+    ['domain/ACTIVITY_LIFECYCLE', 'domain/Foo (bar)', './Foo%20%28bar%29'],
+    ['Workspace', 'Workspace/Projects', 'Workspace/Projects'],
+    ['Workspace', 'Other', './Other'],
+    ['a/b/c', 'a', '../../a'],
+    ['domain/ACTIVITY_LIFECYCLE', 'domain/ACTIVITY_LIFECYCLE', './ACTIVITY_LIFECYCLE'],
+  ]
+  for (const [from, to, href] of cases) {
+    assert.equal(paths.relativePageHref(from, to), href, `${from} -> ${to}`)
+    assert.equal(paths.pagePathFromHref(href, from), to, `${href} from ${from}`)
+    assert.equal(paths.relativePageHref(from, paths.pagePathFromHref(href, from)), href)
+  }
+
+  assert.equal(paths.pageUrl('Planning/Decision Log'), '/page/Planning/Decision%20Log')
+  assert.equal(paths.pagePathFromLocation('/page/domain/ACTIVITY_LIFECYCLE'), 'domain/ACTIVITY_LIFECYCLE')
+  assert.equal(paths.pagePathFromHref('https://example.com/docs', 'Notes'), null)
+  assert.equal(paths.pagePathFromHref('mailto:dev@example.com', 'Notes'), null)
+  assert.equal(paths.pagePathFromHref('/api/attachments/pg_1/file.png', 'Notes'), null)
+  assert.equal(paths.pagePathFromHref('#section', 'Notes'), null)
+
+  const fromSectionOwner = 'domain/ACTIVITY_LIFECYCLE'
+  assert.equal(paths.relativePageHref(fromSectionOwner, 'domain/GAME_PROGRESSION'), './GAME_PROGRESSION')
+  assert.equal(
+    wiki.protectWikiReferences('[[Planning/Decision Log|Журнал решений]]', fromSectionOwner),
+    '[Журнал решений](../Planning/Decision%20Log)',
+  )
+  const saved = wiki.restoreProtectedWikiReferences(
+    [
+      '[GAME_PROGRESSION](./GAME_PROGRESSION)',
+      '[test](../domain/ACTIVITY_LIFECYCLE)',
+      '[Журнал решений](../Planning/Decision%20Log)',
+      '[site](https://example.com/docs)',
+      '[mail](mailto:dev@example.com)',
+      '[file](/api/attachments/pg_1/file.png)',
+    ].join('\n'),
+    'Planning/Notes',
+  )
+  assert.match(saved, /^\[GAME_PROGRESSION\]\(\.\/GAME_PROGRESSION\)$/m)
+  assert.match(saved, /^\[test\]\(\.\.\/domain\/ACTIVITY_LIFECYCLE\)$/m)
+  assert.match(saved, /^\[Журнал решений\]\(\.\/Decision%20Log\)$/m)
+  assert.match(saved, /^\[site\]\(https:\/\/example\.com\/docs\)$/m)
+  assert.match(saved, /^\[mail\]\(mailto:dev@example\.com\)$/m)
+  assert.match(saved, /^\[file\]\(\/api\/attachments\/pg_1\/file\.png\)$/m)
+  assert.equal(wiki.restoreProtectedWikiReferences(saved, 'Planning/Notes'), saved)
+  const converted = wiki.restoreProtectedWikiReferences(
+    wiki.protectWikiReferences('See [[Workspace|Вики]] and `[[Workspace|Вики]]`.', 'Planning/Notes'),
+    'Planning/Notes',
+  )
+  assert.equal(converted, 'See [Вики](../Workspace) and `[[Workspace|Вики]]`.')
+  assert.equal(wiki.restoreProtectedWikiReferences(converted, 'Planning/Notes'), converted)
+  assert.equal(wiki.preserveRelativeHref('https://./GAME_PROGRESSION'), './GAME_PROGRESSION')
+  assert.equal(wiki.preserveRelativeHref('https://../domain/ACTIVITY_LIFECYCLE'), '../domain/ACTIVITY_LIFECYCLE')
+  assert.equal(wiki.preserveRelativeHref('https:///page/Workspace'), '/page/Workspace')
+  assert.equal(wiki.preserveRelativeHref('https://ACTIVITY_LIFECYCLE/STEP'), 'ACTIVITY_LIFECYCLE/STEP')
+  assert.equal(wiki.preserveRelativeHref('https://example.com/docs'), 'https://example.com/docs')
+  assert.equal(wiki.preserveRelativeHref('mailto:dev@example.com'), 'mailto:dev@example.com')
 })

@@ -15,47 +15,96 @@ import '@blocknote/shadcn/style.css'
 import './blocknote.css'
 import { api, isAttachmentUrl } from '../../lib/api'
 import { resolveAttachmentObjectUrl } from '../../lib/attachmentCache'
+import { pageUrl, parsePageHref } from '../../lib/paths'
 import { useFilesStore } from '../../lib/store'
 import { applyImageWidths, collectImageWidths, restoreImageWidths } from './imageWidths'
 import { pagePickerItems } from './pagePicker'
-import { protectWikiReferences, restoreProtectedWikiReferences } from './wikiReferences'
+import { preserveRelativeHref, protectWikiReferences, restoreProtectedWikiReferences } from './wikiReferences'
 
 const HIDDEN_SLASH_ITEMS = new Set(['Audio', 'Video'])
 
 const ALLOWED_LINK_PROTOCOL = /^(https?|ftp|ftps|mailto|tel|callto|sms|cid|xmpp):/i
+const LINK_SCHEME = /^[a-z][a-z0-9+.-]*:/i
+
+function isRelativeHref(href: string) {
+  if (!href || href.startsWith('/') || href.startsWith('#') || href.startsWith('//')) return false
+  if (LINK_SCHEME.test(href)) return false
+  return true
+}
 
 function isValidWikindieLink(href: string | undefined) {
   if (!href) return false
   if (href.startsWith('/')) return true
   if (href.startsWith('#')) return true
-  return ALLOWED_LINK_PROTOCOL.test(href)
+  if (ALLOWED_LINK_PROTOCOL.test(href)) return true
+  return isRelativeHref(href)
+}
+
+function isEditorNavigationHref(href: string) {
+  return href.startsWith('/') || isRelativeHref(href)
+}
+
+function navigationHref(href: string, pagePath: string) {
+  if (href.startsWith('/')) return href
+  const parsed = parsePageHref(href, pagePath)
+  if (!parsed) return null
+  return `${pageUrl(parsed.path)}${parsed.suffix}`
+}
+
+function anchorFromEvent(event: Event) {
+  const target = event.target
+  const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+  const anchor = element?.closest('a[href]')
+  return anchor instanceof HTMLAnchorElement ? anchor : null
 }
 
 type Props = {
   pageId?: string
+  pagePath?: string
   value: string
   onChange: (markdown: string) => void
   editable?: boolean
   className?: string
 }
 
-export function BlockEditor({ pageId, value, onChange, editable = true, className }: Props) {
+export function BlockEditor({ pageId, pagePath = '', value, onChange, editable = true, className }: Props) {
+  const pagePathRef = useRef(pagePath)
+  const editableRef = useRef(editable)
+  pagePathRef.current = pagePath
+  editableRef.current = editable
   const editor = useCreateBlockNote({
-    links: { isValidLink: isValidWikindieLink },
+    links: {
+      isValidLink: isValidWikindieLink,
+      onClick: (event) => {
+        const href = anchorFromEvent(event)?.getAttribute('href') ?? ''
+        if (!isEditorNavigationHref(href)) return false
+        const wantsNavigation = event.ctrlKey || event.metaKey || event.shiftKey
+        if (!editableRef.current || wantsNavigation) return true
+        return false
+      },
+    },
     uploadFile: pageId ? async (file) => (await api.uploadAttachment(pageId, file)).attachment.url : undefined,
     resolveFileUrl: pageId ? async (url) => (isAttachmentUrl(url) ? resolveAttachmentObjectUrl(url) : url) : undefined,
   }, [pageId])
+  const patchedEditor = useRef<typeof editor | null>(null)
+  if (patchedEditor.current !== editor) {
+    patchedEditor.current = editor
+    const editLink = editor.editLink.bind(editor)
+    editor.editLink = (url, text, position) => editLink(preserveRelativeHref(url), text, position)
+  }
   const navigate = useNavigate()
   const tree = useFilesStore((state) => state.tree)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const lastEmittedMd = useRef<string>(value)
+  const seededPath = useRef(pagePath)
   const isReseeding = useRef(false)
   const seeded = useRef(false)
 
   useEffect(() => {
-    if (seeded.current && value === lastEmittedMd.current) return
+    if (seeded.current && value === lastEmittedMd.current && pagePath === seededPath.current) return
     seeded.current = true
-    const parsed = editor.tryParseMarkdownToBlocks(protectWikiReferences(value))
+    seededPath.current = pagePath
+    const parsed = editor.tryParseMarkdownToBlocks(protectWikiReferences(value, pagePath))
     restoreImageWidths(parsed)
     const blocks = parsed.length ? parsed : [{ type: 'paragraph' as const }]
     isReseeding.current = true
@@ -64,18 +113,18 @@ export function BlockEditor({ pageId, value, onChange, editable = true, classNam
     queueMicrotask(() => {
       isReseeding.current = false
     })
-  }, [editor, value])
+  }, [editor, pagePath, value])
 
   const handleChange = useCallback(() => {
     if (isReseeding.current) return
     const md = applyImageWidths(
-      restoreProtectedWikiReferences(editor.blocksToMarkdownLossy(editor.document)),
+      restoreProtectedWikiReferences(editor.blocksToMarkdownLossy(editor.document), pagePath),
       collectImageWidths(editor.document),
     )
     if (md === lastEmittedMd.current) return
     lastEmittedMd.current = md
     onChange(md)
-  }, [editor, onChange])
+  }, [editor, onChange, pagePath])
 
   useEffect(() => {
     const root = wrapperRef.current
@@ -84,18 +133,21 @@ export function BlockEditor({ pageId, value, onChange, editable = true, classNam
     const handler = (event: MouseEvent) => {
       if (event.defaultPrevented) return
       if (event.button !== 0 && event.button !== 1) return
-      const target = event.target as HTMLElement | null
-      const anchor = target?.closest('a[href]') as HTMLAnchorElement | null
+      const eventTarget = event.target as HTMLElement | null
+      const anchor = eventTarget?.closest('a[href]') as HTMLAnchorElement | null
       if (!anchor) return
       const href = anchor.getAttribute('href') ?? ''
-      if (!href.startsWith('/')) return
-      if (editable) {
-        const wantsNavigation = event.button === 1 || event.ctrlKey || event.metaKey || event.shiftKey
-        if (!wantsNavigation) return
+      if (!isEditorNavigationHref(href)) return
+      const wantsNavigation = event.button === 1 || event.ctrlKey || event.metaKey || event.shiftKey
+      if (editable && !wantsNavigation) {
+        event.preventDefault()
+        return
       }
+      const destination = navigationHref(href, pagePathRef.current)
+      if (!destination) return
       event.preventDefault()
       event.stopPropagation()
-      navigate(href)
+      navigate(destination)
     }
 
     root.addEventListener('click', handler, true)
@@ -162,7 +214,7 @@ export function BlockEditor({ pageId, value, onChange, editable = true, classNam
         />
         <SuggestionMenuController
           triggerCharacter="[["
-          getItems={async (query) => pagePickerItems(editor, tree, query)}
+          getItems={async (query) => pagePickerItems(editor, tree, query, pagePath)}
         />
         <GridSuggestionMenuController
           triggerCharacter=":"

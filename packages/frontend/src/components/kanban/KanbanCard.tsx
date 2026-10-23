@@ -14,6 +14,7 @@ export function KanbanCard({
   card,
   cardIndex,
   columnIndex,
+  pagePath,
   board,
   editable,
   availableLabels,
@@ -28,6 +29,7 @@ export function KanbanCard({
   card: Card
   cardIndex: number
   columnIndex: number
+  pagePath: string
   board: KanbanBoard
   editable: boolean
   availableLabels: string[]
@@ -180,6 +182,7 @@ export function KanbanCard({
         editable={editable}
         availableLabels={availableLabels}
         onClose={() => setDialogOpen(false)}
+        pagePath={pagePath}
         onAddComment={(body) => onAddComment({ taskId: card.id, cardUid: card.uid, columnId: board.columns[columnIndex].id, index: cardIndex, body })}
         onUpdateComment={onUpdateComment}
         onDeleteComment={onDeleteComment}

@@ -407,8 +407,10 @@ async function run() {
       return data.content
     })
     assert(!quoteSaved.includes('Q[[Workspace|'), `wiki rewrite corrupted the quoted fence:\n${quoteSaved}`)
-    assert(quoteSaved.includes('[[Workspace]]'), `outside wiki link was lost:\n${quoteSaved}`)
-    console.log('PASS quoted fence renders, and editing does not apply the old wiki rewrite')
+    assert(/Q\["\[\[Workspace\]\]"\]/.test(quoteSaved), `quoted fence turned wiki text into a link:\n${quoteSaved}`)
+    assert(quoteSaved.includes('[Workspace](../Workspace)'), `outside wiki link was not saved as a relative link:\n${quoteSaved}`)
+    assert(!quoteSaved.includes('#wikindie-ref'), `saved quote page kept a wiki hash:\n${quoteSaved}`)
+    console.log('PASS quoted fence stays literal, and the outside wiki link is relative')
     console.log(`QUOTE SAVED:\n${quoteSaved}`)
 
     await openPage(page, pages.slash)

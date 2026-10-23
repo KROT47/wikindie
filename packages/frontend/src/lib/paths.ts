@@ -13,6 +13,74 @@ export function pagePathFromLocation(pathname: string) {
   }
 }
 
+const PAGE_LINK_ORIGIN = 'http://wikindie.local'
+const PAGE_LINK_SCHEME = /^[a-z][a-z0-9+.-]*:/i
+const WIKI_REFERENCE_HASH = '#wikindie-ref'
+
+function pageSegments(pagePath: string) {
+  return pagePath.split('/').filter(Boolean)
+}
+
+function encodeHrefSegment(segment: string) {
+  // encodeURIComponent leaves parentheses, which would end a Markdown link.
+  return encodeURIComponent(segment).replace(/[()]/g, (char) => (char === '(' ? '%28' : '%29'))
+}
+
+function unwrapMarkdownHref(href: string) {
+  const trimmed = href.trim()
+  if (trimmed.startsWith('<') && trimmed.endsWith('>') && trimmed.length >= 2) return trimmed.slice(1, -1).trim()
+  return trimmed
+}
+
+function pageLinkBase(fromPagePath: string) {
+  return new URL(pageUrl(fromPagePath), PAGE_LINK_ORIGIN)
+}
+
+// The address bar is `/page/<path>` with no trailing slash, so the last segment
+// is the page name. A relative link is resolved from that URL's parent, which
+// is how the browser treats an `<a href>` on the page.
+export function relativePageHref(fromPagePath: string, toPagePath: string) {
+  const fromDir = pageSegments(fromPagePath).slice(0, -1)
+  const toSegments = pageSegments(toPagePath)
+  let common = 0
+  while (common < fromDir.length && common < toSegments.length && fromDir[common] === toSegments[common]) common += 1
+  let ups = fromDir.length - common
+  let down = toSegments.slice(common)
+  if (down.length === 0) {
+    const name = toSegments[toSegments.length - 1]
+    if (!name) return './'
+    ups += 1
+    down = [name]
+  }
+  const href = [...Array(ups).fill('..'), ...down.map(encodeHrefSegment)].join('/')
+  if (!href.startsWith('.') && !href.includes('/')) return `./${href}`
+  return href
+}
+
+export type ParsedPageHref = {
+  path: string
+  suffix: string
+}
+
+export function parsePageHref(href: string, fromPagePath: string): ParsedPageHref | null {
+  const normalized = unwrapMarkdownHref(href)
+  if (!normalized || normalized.startsWith('#') || normalized.startsWith('//') || PAGE_LINK_SCHEME.test(normalized)) return null
+  try {
+    const url = new URL(normalized, pageLinkBase(fromPagePath))
+    if (url.origin !== PAGE_LINK_ORIGIN || !url.pathname.startsWith('/page/')) return null
+    const path = pagePathFromLocation(url.pathname)
+    if (!path) return null
+    const hash = url.hash === WIKI_REFERENCE_HASH ? '' : url.hash
+    return { path, suffix: url.search + hash }
+  } catch {
+    return null
+  }
+}
+
+export function pagePathFromHref(href: string, fromPagePath: string) {
+  return parsePageHref(href, fromPagePath)?.path ?? null
+}
+
 export function pageNameFromPath(pagePath: string) {
   const parts = pagePath.split('/').filter(Boolean)
   return parts.length ? parts[parts.length - 1] : 'Home'

@@ -12,6 +12,7 @@ import { KanbanCard } from './KanbanCard'
 export function KanbanColumn({
   column,
   columnIndex,
+  pagePath,
   board,
   editable,
   availableLabels,
@@ -27,6 +28,7 @@ export function KanbanColumn({
 }: {
   column: Column
   columnIndex: number
+  pagePath: string
   board: KanbanBoard
   editable: boolean
   availableLabels: string[]
@@ -277,6 +279,7 @@ export function KanbanColumn({
             card={card}
             cardIndex={cardIndex}
             columnIndex={columnIndex}
+            pagePath={pagePath}
             board={board}
             editable={editable}
             availableLabels={availableLabels}
