@@ -106,6 +106,24 @@ npm run dev
 
 Open `http://localhost:5173`. The API runs on `http://localhost:3000` and Vite proxies API and WebSocket traffic during development. Local development defaults to `dev:dev` unless `WIKINDIE_USER` is set, and the workspace lives at `packages/backend/space`.
 
+## Mermaid diagrams
+
+A fenced code block tagged `mermaid` stays in the Markdown file. Page preview, section preview, and kanban comment preview draw it in the browser. The editor shows the source. In the slash menu, choose **Mermaid diagram** to insert a block with that language.
+
+```mermaid
+flowchart TD
+  A --> B
+```
+
+A syntax error or a failed library load shows a short message and the source; the rest of the page stays up. Wide diagrams scroll inside the page column. There is no visual diagram editor. Saving a page goes through the editor's Markdown conversion: ordinary top-level mermaid fences are kept, while a fence nested in a quote or list can be rewritten. Diagram text is untrusted and rendered in Mermaid's strict mode. Icon packs are not loaded.
+
+```bash
+node scripts/check-markdown.mjs
+WIKINDIE_URL=http://localhost:5173 node scripts/check-mermaid.mjs
+```
+
+`check-mermaid.mjs` needs the dev servers and Playwright. It uses Playwright's Chromium, or system Chrome when that browser is not installed. `scripts/fixtures/mermaid-acceptance.md` is the manual sample; the script copies it into the local workspace, which is not committed.
+
 ## Stack
 
 - React 19, Vite 7, Tailwind CSS 4, Zustand, React Router, TipTap, BlockNote.
@@ -227,6 +245,8 @@ scripts            Repository maintenance and screenshot scripts
 | `npm run start` | Start the built backend, serving the copied frontend assets. |
 | `npm run typecheck` | Type-check backend and frontend workspaces. |
 | `npm run screenshots` | Capture marketing/launch screenshots via Playwright (requires `playwright` installed; see `scripts/screenshots.mjs`). |
+| `node scripts/check-markdown.mjs` | Check that wiki links, icon shortcodes, and image widths leave code blocks unchanged. |
+| `node scripts/check-mermaid.mjs` | Render Mermaid against a running dev server. Set `WIKINDIE_URL` when the app is not on port 5173. |
 
 ## Status
 

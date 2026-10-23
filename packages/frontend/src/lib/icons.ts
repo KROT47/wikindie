@@ -1,3 +1,5 @@
+import { replaceOutsideCode } from './markdownSegments'
+
 // Legacy icon pool. Page icons are now picked from the full emoji-mart set and
 // stored as raw glyphs (see IconPicker), but these friendly ids remain as
 // back-compat aliases so existing frontmatter and `:shortcode:` markdown still resolve.
@@ -62,11 +64,7 @@ export function isRawEmoji(value?: string) {
 }
 
 export function renderIconShortcodes(content: string) {
-  return content.replace(
-    /(`{3,}[\s\S]*?`{3,}|`[^`\n]+`)|:([a-z0-9_-]+):/gi,
-    (match, codeBlock: string | undefined, id: string | undefined) => {
-      if (codeBlock) return match
-      return resolveWikiIcon(id!)?.glyph ?? match
-    },
-  )
+  return replaceOutsideCode(content, (segment) => segment.replace(/:([a-z0-9_-]+):/gi, (match, id: string) => {
+    return resolveWikiIcon(id)?.glyph ?? match
+  }))
 }

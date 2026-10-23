@@ -1,3 +1,4 @@
+import { replaceOutsideCode } from '../../lib/markdownSegments'
 import { pagePathFromLocation, pageUrl } from '../../lib/paths'
 
 const WIKI_REFERENCE_HASH = 'wikindie-ref'
@@ -55,19 +56,7 @@ function protectReferencesInLine(line: string) {
 }
 
 export function protectWikiReferences(value: string) {
-  let fenced = false
-  let fenceMarker = ''
-
-  return value.split('\n').map((line) => {
-    const fence = line.match(/^\s*(`{3,}|~{3,})/)
-    if (fence && (!fenced || fence[1][0] === fenceMarker[0])) {
-      fenced = !fenced
-      fenceMarker = fenced ? fence[1] : ''
-      return line
-    }
-    if (fenced) return line
-    return protectReferencesInLine(line)
-  }).join('\n')
+  return replaceOutsideCode(value, (segment) => segment.split('\n').map(protectReferencesInLine).join('\n'))
 }
 
 function restoredReferenceFor(label: string, href: string, fallback: string) {
@@ -85,5 +74,8 @@ function restoredReferenceFor(label: string, href: string, fallback: string) {
 }
 
 export function restoreProtectedWikiReferences(value: string) {
-  return value.replace(/\[((?:\\.|[^\\\]\n])*)\]\(([^)\n]+)\)/g, (match, label: string, href: string) => restoredReferenceFor(label, href, match))
+  return replaceOutsideCode(value, (segment) => segment.replace(
+    /\[((?:\\.|[^\\\]\n])*)\]\(([^)\n]+)\)/g,
+    (match, label: string, href: string) => restoredReferenceFor(label, href, match),
+  ))
 }

@@ -52,7 +52,7 @@ When finishing a roadmap task (a `WK-*` card on the `Wikindie/Roadmap` board), d
 - API client: `src/lib/api.ts` uses same-origin `/api/*` paths (Vite proxies in dev, backend serves directly in prod). All requests inject `Authorization: Bearer <token>`; a `401` triggers `logout()`.
 - State: Zustand. `useAuthStore` persists `token`/`username` in `localStorage` under keys `wikindie:token` and `wikindie:username`. `useFilesStore` holds the page tree.
 - WebSocket file events arrive as Markdown paths like `Page.md` or `Page/_Index.md`; refresh logic in `pages/PageView.tsx` matches against those exact forms.
-- Editor stack: BlockNote (`@blocknote/*`) for the rich editor; `react-markdown` + `remark-gfm` for rendering.
+- Editor stack: BlockNote (`@blocknote/*`, pinned at 0.50) for the rich editor; `react-markdown` + `remark-gfm` for rendering. Mermaid diagrams are fenced `mermaid` code blocks drawn only in preview by `MarkdownPreview`; do not upgrade BlockNote to get a diagram block.
 - Page icons are emoji glyphs picked from the full emoji-mart set (shared `IconPicker`, stored as the raw glyph). Legacy friendly ids in `src/lib/icons.ts` (e.g., `project`, `idea`, `devlog`) still resolve for back-compat, and Markdown supports matching shortcodes like `:idea:`.
 
 ### Build pipeline
