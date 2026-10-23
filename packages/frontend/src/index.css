@@ -298,6 +298,52 @@ textarea {
   max-width: 100%;
 }
 
+.markdown-preview .mermaid-diagram {
+  margin: 0.75rem 0;
+  max-width: 100%;
+  overflow-x: auto;
+  position: relative;
+}
+
+.markdown-preview-compact .mermaid-diagram {
+  margin: 0.4rem 0;
+}
+
+.markdown-preview .mermaid-diagram svg {
+  display: block;
+  height: auto;
+  max-width: none;
+}
+
+.mermaid-diagram-stage {
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+}
+
+.mermaid-diagram-error,
+.mermaid-diagram-pending {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.mermaid-diagram-error {
+  background: var(--color-input);
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+}
+
+.mermaid-diagram-error p {
+  margin: 0;
+}
+
+.mermaid-diagram-error pre {
+  margin-top: 0.75rem;
+}
+
 .markdown-preview th,
 .markdown-preview td {
   border: 1px solid var(--color-border);

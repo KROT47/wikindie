@@ -1,3 +1,5 @@
+import { replaceOutsideCode } from '../../lib/markdownSegments'
+
 // BlockNote stores a resized image's width in the image block's `previewWidth`
 // prop, which `blocksToMarkdownLossy` drops. To keep the Markdown preview in
 // sync with the editor we encode the width into the image URL as a `#w=NNN`
@@ -37,10 +39,10 @@ export function collectImageWidths(blocks: EditorBlockLike[], out = new Map<stri
 
 export function applyImageWidths(markdown: string, widths: Map<string, number>): string {
   if (!widths.size) return markdown
-  return markdown.replace(/(!\[[^\]]*\]\()([^)\s]+)(\))/g, (match, pre: string, url: string, post: string) => {
+  return replaceOutsideCode(markdown, (segment) => segment.replace(/(!\[[^\]]*\]\()([^)\s]+)(\))/g, (match, pre: string, url: string, post: string) => {
     const width = widths.get(url)
     return width ? `${pre}${withWidthFragment(url, width)}${post}` : match
-  })
+  }))
 }
 
 export function restoreImageWidths(blocks: EditorBlockLike[]): void {

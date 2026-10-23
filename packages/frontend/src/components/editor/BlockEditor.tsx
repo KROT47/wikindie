@@ -10,7 +10,7 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
-import { Link2 } from 'lucide-react'
+import { Link2, Workflow } from 'lucide-react'
 import '@blocknote/shadcn/style.css'
 import './blocknote.css'
 import { api, isAttachmentUrl } from '../../lib/api'
@@ -132,9 +132,28 @@ export function BlockEditor({ pageId, value, onChange, editable = true, classNam
                 ext?.openSuggestionMenu?.('[[', { deleteTriggerCharacter: false })
               },
             }
+            const mermaidDiagram: DefaultReactSuggestionItem = {
+              title: 'Mermaid diagram',
+              subtext: 'Insert a Mermaid code block',
+              aliases: ['mermaid', 'diagram', 'chart'],
+              group: 'Insert',
+              icon: <Workflow size={16} />,
+              onItemClick: () => {
+                editor.insertBlocks(
+                  [{
+                    type: 'codeBlock',
+                    props: { language: 'mermaid' },
+                    content: 'flowchart TD\n  A --> B',
+                  }],
+                  editor.getTextCursorPosition().block,
+                  'after',
+                )
+              },
+            }
             return filterSuggestionItems(
               [
                 pageLink,
+                mermaidDiagram,
                 ...getDefaultReactSlashMenuItems(editor).filter((item) => !HIDDEN_SLASH_ITEMS.has(item.title) && (pageId || item.title !== 'File')),
               ],
               query,

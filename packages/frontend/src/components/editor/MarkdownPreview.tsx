@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { Children, isValidElement, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api, isAttachmentUrl } from '../../lib/api'
 import { resolveAttachmentObjectUrl } from '../../lib/attachmentCache'
 import { parseImageWidth } from './imageWidths'
+import { MermaidDiagram } from './MermaidDiagram'
 import { renderIconShortcodes } from '../../lib/icons'
+import { replaceOutsideCode } from '../../lib/markdownSegments'
 import { pageUrl } from '../../lib/paths'
 
 function isExternalUrl(href: string) {
@@ -75,19 +77,7 @@ function renderReferencesInLine(line: string) {
 }
 
 function renderPageReferences(value: string) {
-  let fenced = false
-  let fenceMarker = ''
-
-  return value.split('\n').map((line) => {
-    const fence = line.match(/^\s*(`{3,}|~{3,})/)
-    if (fence && (!fenced || fence[1][0] === fenceMarker[0])) {
-      fenced = !fenced
-      fenceMarker = fenced ? fence[1] : ''
-      return line
-    }
-    if (fenced) return line
-    return renderReferencesInLine(line)
-  }).join('\n')
+  return replaceOutsideCode(value, (segment) => segment.split('\n').map(renderReferencesInLine).join('\n'))
 }
 
 function filenameFromUrl(url: string) {
@@ -135,6 +125,23 @@ function AttachmentImage({ src = '', alt = '', style, ...props }: React.ImgHTMLA
   return <img src={resolvedSrc} alt={alt} style={sizeStyle} {...props} />
 }
 
+function nodeText(children: ReactNode): string {
+  return Children.toArray(children).map((child) => {
+    if (typeof child === 'string' || typeof child === 'number') return String(child)
+    if (isValidElement<{ children?: ReactNode }>(child)) return nodeText(child.props.children)
+    return ''
+  }).join('')
+}
+
+function mermaidSource(children: ReactNode) {
+  const code = Children.toArray(children).find((child) => {
+    if (!isValidElement<{ className?: string }>(child)) return false
+    return /\blanguage-mermaid\b/.test(child.props.className ?? '')
+  })
+  if (!isValidElement<{ children?: ReactNode }>(code)) return null
+  return nodeText(code.props.children).replace(/\n$/, '')
+}
+
 function AttachmentLink({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) {
   const handleClick = async (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
@@ -173,6 +180,11 @@ export function MarkdownPreview({
             return <a href={href} {...props}>{children}</a>
           },
           img: ({ src = '', alt = '', ...props }) => <AttachmentImage src={src} alt={alt} {...props} />,
+          pre: ({ children }) => {
+            const source = mermaidSource(children)
+            if (source != null) return <MermaidDiagram source={source} />
+            return <pre>{children}</pre>
+          },
           table: ({ children, ...props }) => (
             <div className="markdown-table-scroll">
               <table {...props}>{children}</table>
