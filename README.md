@@ -142,7 +142,7 @@ Each section file has its own anchor, `section-` plus the file stem from its sto
 [Start here](/page/Guide#section-start-here)
 ```
 
-Opening any of these URLs loads the page and scrolls the page column so the heading or section sits at the top of that column. A target in the last screen stops at the end of the content. The **Copy link** control is on preview headings and on each section. It is not shown while that body or section is in the block editor, and kanban comments do not get anchors.
+Opening any of these URLs loads the page and scrolls the page column so the heading or section sits at the top of that column. A target in the last screen stops at the end of the content. The **Copy link** control is on preview headings and on each section. A heading copies a relative link such as `./Guide#installation`. It is not shown while that body or section is in the block editor, and kanban comments do not get anchors.
 
 ## Stack
 

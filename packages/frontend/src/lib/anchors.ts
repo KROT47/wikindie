@@ -5,7 +5,7 @@ import { unified } from 'unified'
 import type { Node } from 'unist'
 import { visit } from 'unist-util-visit'
 import { preparePreviewMarkdown } from '../components/editor/wikiReferences'
-import { pageUrl, WIKI_REFERENCE_HASH } from './paths'
+import { pageUrl, relativePageHref, WIKI_REFERENCE_HASH } from './paths'
 
 const RESERVED_HEADING_ID = WIKI_REFERENCE_HASH.slice(1)
 
@@ -149,6 +149,11 @@ export function anchorHref(pagePath: string, id: string, origin: string) {
   const url = new URL(pageUrl(pagePath), origin)
   url.hash = id
   return url.href
+}
+
+// Same-page heading link in the form the editor stores, for example `./Guide#installation`.
+export function relativeHeadingHref(pagePath: string, id: string) {
+  return `${relativePageHref(pagePath, pagePath)}#${id}`
 }
 
 export function scrollAnchorIntoView(container: HTMLElement, target: HTMLElement) {
