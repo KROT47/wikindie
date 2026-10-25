@@ -31,6 +31,19 @@ function panDeltaFor(event: KeyboardEvent) {
   }
 }
 
+const wheelLine = 16
+const pinchSensitivity = 0.01
+
+function wheelPan(event: WheelEvent) {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    return { x: event.deltaX * wheelLine, y: event.deltaY * wheelLine }
+  }
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+    return { x: event.deltaX * window.innerWidth, y: event.deltaY * window.innerHeight }
+  }
+  return { x: event.deltaX, y: event.deltaY }
+}
+
 function suppressDragClick() {
   const suppress = (event: MouseEvent) => {
     event.preventDefault()
@@ -68,9 +81,11 @@ type DragSession = {
 export function MermaidDiagram({ source }: { source: string }) {
   const dark = useHtmlDark()
   const stageRef = useRef<HTMLDivElement>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const panRef = useRef({ x: 0, y: 0 })
+  const scaleRef = useRef(1)
   const dragRef = useRef<DragSession | null>(null)
   const [svg, setSvg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -80,6 +95,7 @@ export function MermaidDiagram({ source }: { source: string }) {
   const [dragging, setDragging] = useState(false)
   const showToggle = Boolean(svg) && !error
   panRef.current = pan
+  scaleRef.current = scale
 
   const closeExpanded = useCallback(() => {
     const drag = dragRef.current
@@ -90,6 +106,7 @@ export function MermaidDiagram({ source }: { source: string }) {
     }
     const origin = { x: 0, y: 0 }
     panRef.current = origin
+    scaleRef.current = 1
     setDragging(false)
     setScale(1)
     setPan(origin)
@@ -138,7 +155,11 @@ export function MermaidDiagram({ source }: { source: string }) {
       if (delta) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        setPan((current) => ({ x: current.x + delta.x, y: current.y + delta.y }))
+        setPan((current) => {
+          const next = { x: current.x + delta.x, y: current.y + delta.y }
+          panRef.current = next
+          return next
+        })
         return
       }
       const factor = zoomFactorFor(event)
@@ -155,6 +176,76 @@ export function MermaidDiagram({ source }: { source: string }) {
       returnFocus.current?.focus()
     }
   }, [closeExpanded, expanded, zoomBy])
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!expanded || !viewport) return
+
+    const zoomAbout = (point: { clientX: number; clientY: number }, nextScale: number) => {
+      const current = scaleRef.current
+      const next = clampScale(nextScale)
+      if (next === current) return
+      const ratio = next / current
+      const rect = viewport.getBoundingClientRect()
+      const inside = point.clientX >= rect.left && point.clientX <= rect.right && point.clientY >= rect.top && point.clientY <= rect.bottom
+      const focalX = inside ? point.clientX - rect.left : rect.width / 2
+      const focalY = inside ? point.clientY - rect.top : rect.height / 2
+      const pan = panRef.current
+      const nextPan = {
+        x: pan.x * ratio + (focalX - rect.width / 2) * (1 - ratio),
+        y: pan.y * ratio + (focalY - rect.height / 2) * (1 - ratio),
+      }
+      scaleRef.current = next
+      panRef.current = nextPan
+      setScale(next)
+      setPan(nextPan)
+    }
+
+    let pinchOrigin = scaleRef.current
+    let trackpadPinch = false
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      if (event.ctrlKey || event.metaKey) {
+        if (trackpadPinch) return
+        const delta = wheelPan(event)
+        zoomAbout(event, scaleRef.current * Math.exp(-delta.y * pinchSensitivity))
+        return
+      }
+      const delta = wheelPan(event)
+      const nextPan = { x: panRef.current.x - delta.x, y: panRef.current.y - delta.y }
+      panRef.current = nextPan
+      setPan(nextPan)
+    }
+    const onGestureStart = (event: Event) => {
+      event.preventDefault()
+      trackpadPinch = true
+      pinchOrigin = scaleRef.current
+    }
+    const onGestureChange = (event: Event) => {
+      event.preventDefault()
+      const gesture = event as Event & { scale?: number; clientX?: number; clientY?: number }
+      if (typeof gesture.scale !== 'number') return
+      zoomAbout(
+        { clientX: gesture.clientX ?? 0, clientY: gesture.clientY ?? 0 },
+        pinchOrigin * gesture.scale,
+      )
+    }
+    const onGestureEnd = (event: Event) => {
+      event.preventDefault()
+      trackpadPinch = false
+    }
+
+    viewport.addEventListener('wheel', onWheel, { passive: false })
+    viewport.addEventListener('gesturestart', onGestureStart, { passive: false })
+    viewport.addEventListener('gesturechange', onGestureChange, { passive: false })
+    viewport.addEventListener('gestureend', onGestureEnd, { passive: false })
+    return () => {
+      viewport.removeEventListener('wheel', onWheel)
+      viewport.removeEventListener('gesturestart', onGestureStart)
+      viewport.removeEventListener('gesturechange', onGestureChange)
+      viewport.removeEventListener('gestureend', onGestureEnd)
+    }
+  }, [expanded, svg])
 
   useEffect(() => () => {
     const drag = dragRef.current
@@ -203,7 +294,9 @@ export function MermaidDiagram({ source }: { source: string }) {
       if (!drag.moved && Math.hypot(dx, dy) < dragThreshold) return
       drag.moved = true
       if (ev.cancelable) ev.preventDefault()
-      setPan({ x: drag.originX + dx, y: drag.originY + dy })
+      const next = { x: drag.originX + dx, y: drag.originY + dy }
+      panRef.current = next
+      setPan(next)
     }
 
     const onUp = (ev: PointerEvent) => {
@@ -294,7 +387,7 @@ export function MermaidDiagram({ source }: { source: string }) {
             <pre><code>{source}</code></pre>
           </div>
         ) : expanded && svg ? (
-          <div className="mermaid-diagram-viewport" onPointerDown={onPointerDown}>
+          <div ref={viewportRef} className="mermaid-diagram-viewport" onPointerDown={onPointerDown}>
             {canvas}
           </div>
         ) : (
