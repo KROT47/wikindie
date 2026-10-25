@@ -2,6 +2,11 @@ import assert from 'node:assert/strict'
 import { createServer } from 'vite'
 import { after, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { markdownToHTML } from '@blocknote/core'
 
 const storage = new Map()
 globalThis.localStorage = {
@@ -410,4 +415,80 @@ test('heading slugs stay unique across the page and sections', () => {
   assert.equal(anchors.sectionAnchorBase('_sections/start-here.md'), 'section-start-here')
   assert.equal(anchors.sectionAnchorBase('_sections/My Notes.md'), 'section-My-Notes')
   assert.equal(new Set(plan.bodyHeadingIds).has('wikindie-ref'), false)
+})
+
+test('<br> stays editable and renders as a line break', async () => {
+  const breaks = await server.ssrLoadModule('/src/lib/lineBreaks.ts')
+
+  const source = [
+    'Hello<br>world',
+    '',
+    'Hello<br/>there and Hello<br />again and Hello<BR>up',
+    '',
+    'Spaced <br class="x"> tag',
+    '',
+    'not <brr> tag',
+    '',
+    '| Name | Note |',
+    '| --- | --- |',
+    '| Ada<br>Lovelace | kept |',
+    '',
+    '- item<br>next',
+    '',
+    '> quote<br>more',
+    '',
+    '<br>',
+    '',
+    '- <br>',
+    '',
+    '```html',
+    '<br>',
+    '```',
+    '',
+    'Inline `<br>` stays.',
+    '',
+    'Already \\<br> literal.',
+  ].join('\n')
+
+  const escaped = breaks.escapeBreakTags(source)
+  assert.match(escaped, /Hello\\<br>world/)
+  assert.match(escaped, /Hello\\<br\/>there/)
+  assert.match(escaped, /Hello\\<br \/>again/)
+  assert.match(escaped, /Hello\\<BR>up/)
+  assert.match(escaped, /Spaced \\<br class="x"> tag/)
+  assert.match(escaped, /not <brr> tag/)
+  assert.match(escaped, /Ada\\<br>Lovelace/)
+  assert.match(escaped, /```html\n<br>\n```/)
+  assert.match(escaped, /Inline `<br>` stays/)
+  assert.match(escaped, /Already \\<br> literal/)
+  assert.equal(breaks.escapeBreakTags(escaped), escaped)
+
+  const htmlForEditor = markdownToHTML(escaped)
+  assert.match(htmlForEditor, /Hello(?:&#x3C;|&lt;)br>world/)
+  assert.doesNotMatch(htmlForEditor, /Helloworld/)
+  assert.match(htmlForEditor, /<code>&#x3C;br>/)
+  assert.equal(markdownToHTML('Hello<br>world'), '<p>Helloworld</p>')
+
+  const preview = renderToStaticMarkup(React.createElement(ReactMarkdown, {
+    remarkPlugins: [remarkGfm, breaks.remarkBreakTags],
+    children: source,
+  }))
+  assert.match(preview, /Hello<br\s*\/?>\s*world/)
+  assert.match(preview, /Hello<br\s*\/?>\s*there/)
+  assert.match(preview, /Hello<br\s*\/?>\s*again/)
+  assert.match(preview, /Hello<br\s*\/?>\s*up/)
+  assert.match(preview, /Spaced <br\s*\/?>\s*tag/)
+  assert.doesNotMatch(preview, /class="x"/)
+  assert.match(preview, /not &lt;brr&gt; tag/)
+  assert.doesNotMatch(preview, /<brr/)
+  assert.match(preview, /<td>Ada<br\s*\/?>\s*Lovelace<\/td>/)
+  assert.match(preview, /item<br\s*\/?>\s*next/)
+  assert.match(preview, /quote<br\s*\/?>\s*more/)
+  assert.match(preview, /<pre><code class="language-html">&lt;br&gt;/)
+  assert.match(preview, /<code>&lt;br&gt;<\/code> stays/)
+  assert.match(preview, /Already &lt;br&gt; literal\./)
+
+  const linked = breaks.escapeBreakTags(wiki.protectWikiReferences('See [[Workspace|Hello<br>there]].', 'Notes'))
+  assert.match(linked, /Hello\\<br>there/)
+  assert.equal(anchors.headingIdsForMarkdown('# Hello<br>World\n\n# Next\n').join(','), 'helloworld,next')
 })

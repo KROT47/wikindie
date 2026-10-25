@@ -10,10 +10,11 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
-import { Link2, Workflow } from 'lucide-react'
+import { CornerDownLeft, Link2, Workflow } from 'lucide-react'
 import '@blocknote/shadcn/style.css'
 import './blocknote.css'
 import { api, isAttachmentUrl } from '../../lib/api'
+import { escapeBreakTags } from '../../lib/lineBreaks'
 import { resolveAttachmentObjectUrl } from '../../lib/attachmentCache'
 import { findTreeNode, previewNavigationHref } from '../../lib/paths'
 import { useFilesStore } from '../../lib/store'
@@ -107,7 +108,7 @@ export function BlockEditor({ pageId, pagePath = '', pageIndex, value, onChange,
     seeded.current = true
     seededPath.current = pagePath
     seededFolder.current = folder
-    const parsed = editor.tryParseMarkdownToBlocks(protectWikiReferences(value, pagePath, folder))
+    const parsed = editor.tryParseMarkdownToBlocks(escapeBreakTags(protectWikiReferences(value, pagePath, folder)))
     restoreImageWidths(parsed)
     const blocks = parsed.length ? parsed : [{ type: 'paragraph' as const }]
     isReseeding.current = true
@@ -174,6 +175,16 @@ export function BlockEditor({ pageId, pagePath = '', pageIndex, value, onChange,
         <SuggestionMenuController
           triggerCharacter="/"
           getItems={async (query) => {
+            const lineBreak: DefaultReactSuggestionItem = {
+              title: 'Line break',
+              subtext: 'Insert a <br> tag',
+              aliases: ['br', 'break', 'newline', 'line'],
+              group: 'Insert',
+              icon: <CornerDownLeft size={16} />,
+              onItemClick: () => {
+                editor.insertInlineContent('<br>')
+              },
+            }
             const pageLink: DefaultReactSuggestionItem = {
               title: 'Page link',
               subtext: 'Insert a link to another page',
@@ -207,6 +218,7 @@ export function BlockEditor({ pageId, pagePath = '', pageIndex, value, onChange,
             }
             return filterSuggestionItems(
               [
+                lineBreak,
                 pageLink,
                 mermaidDiagram,
                 ...getDefaultReactSlashMenuItems(editor).filter((item) => !HIDDEN_SLASH_ITEMS.has(item.title) && (pageId || item.title !== 'File')),

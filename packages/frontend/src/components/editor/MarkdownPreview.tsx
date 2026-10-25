@@ -10,6 +10,7 @@ import { useFilesStore } from '../../lib/store'
 import { parseImageWidth } from './imageWidths'
 import { MermaidDiagram } from './MermaidDiagram'
 import { CopyAnchorButton } from './CopyAnchorButton'
+import { remarkBreakTags } from '../../lib/lineBreaks'
 import { preparePreviewMarkdown } from './wikiReferences'
 
 function isExternalUrl(href: string) {
@@ -162,7 +163,7 @@ export function MarkdownPreview({
   const index = pageIndex ?? Boolean(findTreeNode(tree, pagePath)?.index)
   const source = useMemo(() => preparePreviewMarkdown(content), [content])
   const remarkPlugins = useMemo(
-    () => (headingIds ? [remarkGfm, createRemarkHeadingIds(headingIds)] : [remarkGfm]),
+    () => (headingIds ? [remarkGfm, remarkBreakTags, createRemarkHeadingIds(headingIds)] : [remarkGfm, remarkBreakTags]),
     [headingIds],
   )
   const components = useMemo(() => ({
