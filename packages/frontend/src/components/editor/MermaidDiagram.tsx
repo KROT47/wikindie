@@ -25,8 +25,8 @@ function panDeltaFor(event: KeyboardEvent) {
   switch (event.key) {
     case 'ArrowLeft': return { x: -step, y: 0 }
     case 'ArrowRight': return { x: step, y: 0 }
-    case 'ArrowUp': return { x: 0, y: -step }
-    case 'ArrowDown': return { x: 0, y: step }
+    case 'ArrowUp': return { x: 0, y: step }
+    case 'ArrowDown': return { x: 0, y: -step }
     default: return null
   }
 }
