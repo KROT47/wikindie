@@ -7,6 +7,8 @@ const minScale = 0.25
 const maxScale = 8
 const zoomFactor = 1.25
 const dragThreshold = 4
+const panStep = 48
+const panStepFast = 192
 
 function clampScale(value: number) {
   return Math.min(maxScale, Math.max(minScale, value))
@@ -16,6 +18,17 @@ function zoomFactorFor(event: KeyboardEvent) {
   if (event.key === '=') return zoomFactor
   if (event.key === '-' || event.code === 'NumpadSubtract') return 1 / zoomFactor
   return null
+}
+
+function panDeltaFor(event: KeyboardEvent) {
+  const step = event.shiftKey ? panStepFast : panStep
+  switch (event.key) {
+    case 'ArrowLeft': return { x: -step, y: 0 }
+    case 'ArrowRight': return { x: step, y: 0 }
+    case 'ArrowUp': return { x: 0, y: -step }
+    case 'ArrowDown': return { x: 0, y: step }
+    default: return null
+  }
 }
 
 function suppressDragClick() {
@@ -121,6 +134,13 @@ export function MermaidDiagram({ source }: { source: string }) {
       if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return
       const target = event.target
       if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select'))) return
+      const delta = panDeltaFor(event)
+      if (delta) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        setPan((current) => ({ x: current.x + delta.x, y: current.y + delta.y }))
+        return
+      }
       const factor = zoomFactorFor(event)
       if (factor == null) return
       event.preventDefault()
