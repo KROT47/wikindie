@@ -13,7 +13,7 @@ function clampScale(value: number) {
 }
 
 function zoomFactorFor(event: KeyboardEvent) {
-  if (event.key === '+' || event.code === 'NumpadAdd') return zoomFactor
+  if (event.key === '=') return zoomFactor
   if (event.key === '-' || event.code === 'NumpadSubtract') return 1 / zoomFactor
   return null
 }
@@ -243,9 +243,9 @@ export function MermaidDiagram({ source }: { source: string }) {
               <button
                 className="mermaid-diagram-tool"
                 type="button"
-                aria-keyshortcuts="+"
+                aria-keyshortcuts="="
                 aria-label="Zoom in"
-                title="Zoom in (+)"
+                title="Zoom in (=)"
                 disabled={!canZoomIn}
                 onClick={() => zoomBy(zoomFactor)}
               >
