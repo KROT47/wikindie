@@ -1,7 +1,32 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { Maximize2, Minimize2, Minus, Plus } from 'lucide-react'
 import { isMermaidLoadError, renderMermaid } from './mermaidRuntime'
+
+const minScale = 0.25
+const maxScale = 8
+const zoomFactor = 1.25
+const dragThreshold = 4
+
+function clampScale(value: number) {
+  return Math.min(maxScale, Math.max(minScale, value))
+}
+
+function zoomFactorFor(event: KeyboardEvent) {
+  if (event.key === '+' || event.code === 'NumpadAdd') return zoomFactor
+  if (event.key === '-' || event.code === 'NumpadSubtract') return 1 / zoomFactor
+  return null
+}
+
+function suppressDragClick() {
+  const suppress = (event: MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    window.removeEventListener('click', suppress, true)
+  }
+  window.addEventListener('click', suppress, true)
+  window.setTimeout(() => window.removeEventListener('click', suppress, true), 0)
+}
 
 function useHtmlDark() {
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
@@ -17,15 +42,50 @@ function useHtmlDark() {
   return dark
 }
 
+type DragSession = {
+  pointerId: number
+  startX: number
+  startY: number
+  originX: number
+  originY: number
+  moved: boolean
+  stop: () => void
+}
+
 export function MermaidDiagram({ source }: { source: string }) {
   const dark = useHtmlDark()
   const stageRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
+  const panRef = useRef({ x: 0, y: 0 })
+  const dragRef = useRef<DragSession | null>(null)
   const [svg, setSvg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [scale, setScale] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(false)
   const showToggle = Boolean(svg) && !error
+  panRef.current = pan
+
+  const closeExpanded = useCallback(() => {
+    const drag = dragRef.current
+    if (drag) {
+      dragRef.current = null
+      drag.stop()
+      if (drag.moved) suppressDragClick()
+    }
+    const origin = { x: 0, y: 0 }
+    panRef.current = origin
+    setDragging(false)
+    setScale(1)
+    setPan(origin)
+    setExpanded(false)
+  }, [])
+
+  const zoomBy = useCallback((factor: number) => {
+    setScale((current) => clampScale(current * factor))
+  }, [])
 
   useEffect(() => {
     const stage = stageRef.current
@@ -52,10 +112,20 @@ export function MermaidDiagram({ source }: { source: string }) {
   useEffect(() => {
     if (!expanded) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        closeExpanded()
+        return
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select'))) return
+      const factor = zoomFactorFor(event)
+      if (factor == null) return
       event.preventDefault()
       event.stopImmediatePropagation()
-      setExpanded(false)
+      zoomBy(factor)
     }
     window.addEventListener('keydown', onKeyDown, true)
     const frame = window.requestAnimationFrame(() => toggleRef.current?.focus())
@@ -64,20 +134,128 @@ export function MermaidDiagram({ source }: { source: string }) {
       window.cancelAnimationFrame(frame)
       returnFocus.current?.focus()
     }
-  }, [expanded])
+  }, [closeExpanded, expanded, zoomBy])
+
+  useEffect(() => () => {
+    const drag = dragRef.current
+    if (!drag) return
+    dragRef.current = null
+    drag.stop()
+  }, [])
 
   const toggle = () => {
-    if (!expanded) returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    setExpanded((open) => !open)
+    if (expanded) {
+      closeExpanded()
+      return
+    }
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setExpanded(true)
   }
 
+  const endDrag = (moved: boolean) => {
+    const drag = dragRef.current
+    if (!drag) return
+    dragRef.current = null
+    drag.stop()
+    if (moved) suppressDragClick()
+    setDragging(false)
+  }
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary || event.button !== 0 || dragRef.current) return
+    const target = event.currentTarget
+    target.setPointerCapture(event.pointerId)
+
+    const drag: DragSession = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: panRef.current.x,
+      originY: panRef.current.y,
+      moved: false,
+      stop: () => {},
+    }
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== drag.pointerId) return
+      const dx = ev.clientX - drag.startX
+      const dy = ev.clientY - drag.startY
+      if (!drag.moved && Math.hypot(dx, dy) < dragThreshold) return
+      drag.moved = true
+      if (ev.cancelable) ev.preventDefault()
+      setPan({ x: drag.originX + dx, y: drag.originY + dy })
+    }
+
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== drag.pointerId) return
+      endDrag(drag.moved)
+    }
+
+    drag.stop = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      if (target.hasPointerCapture(drag.pointerId)) target.releasePointerCapture(drag.pointerId)
+    }
+
+    dragRef.current = drag
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    setDragging(true)
+  }
+
+  const canZoomIn = scale < maxScale
+  const canZoomOut = scale > minScale
+  const transform = expanded && (scale !== 1 || pan.x !== 0 || pan.y !== 0)
+    ? `translate(${pan.x}px, ${pan.y}px) scale(${scale})`
+    : undefined
+
+  const canvas = svg ? (
+    <div
+      className="mermaid-diagram-canvas"
+      style={transform ? { transform } : undefined}
+      aria-label="Diagram"
+      role="img"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  ) : (
+    <p className="mermaid-diagram-pending">Rendering diagram…</p>
+  )
+
   const frame = (
-    <div className={`mermaid-diagram-frame${expanded ? ' mermaid-diagram-expanded' : ''}`}>
+    <div className={`mermaid-diagram-frame${expanded ? ' mermaid-diagram-expanded' : ''}${dragging ? ' is-panning' : ''}`}>
       {showToggle ? (
         <div className="mermaid-diagram-toolbar">
+          {expanded ? (
+            <>
+              <button
+                className="mermaid-diagram-tool"
+                type="button"
+                aria-keyshortcuts="-"
+                aria-label="Zoom out"
+                title="Zoom out (-)"
+                disabled={!canZoomOut}
+                onClick={() => zoomBy(1 / zoomFactor)}
+              >
+                <Minus size={15} aria-hidden />
+              </button>
+              <button
+                className="mermaid-diagram-tool"
+                type="button"
+                aria-keyshortcuts="+"
+                aria-label="Zoom in"
+                title="Zoom in (+)"
+                disabled={!canZoomIn}
+                onClick={() => zoomBy(zoomFactor)}
+              >
+                <Plus size={15} aria-hidden />
+              </button>
+            </>
+          ) : null}
           <button
             ref={toggleRef}
-            className="mermaid-diagram-toggle"
+            className="mermaid-diagram-tool"
             type="button"
             aria-expanded={expanded}
             aria-label={expanded ? 'Collapse' : 'Expand to full screen'}
@@ -95,10 +273,12 @@ export function MermaidDiagram({ source }: { source: string }) {
             <p>{error}</p>
             <pre><code>{source}</code></pre>
           </div>
-        ) : svg ? (
-          <div className="mermaid-diagram-canvas" aria-label="Diagram" role="img" dangerouslySetInnerHTML={{ __html: svg }} />
+        ) : expanded && svg ? (
+          <div className="mermaid-diagram-viewport" onPointerDown={onPointerDown}>
+            {canvas}
+          </div>
         ) : (
-          <p className="mermaid-diagram-pending">Rendering diagram…</p>
+          canvas
         )}
       </figure>
     </div>
