@@ -11,6 +11,7 @@ export interface TreeNode {
   name: string
   title: string
   path: string
+  index?: boolean
   type: 'page' | 'board'
   icon?: string
   order?: number
@@ -26,6 +27,7 @@ export interface PageSection {
 export interface PageBundle extends MarkdownFile {
   id: string
   path: string
+  index?: boolean
   type: 'page' | 'board'
   diskSizeBytes: number
   sections: PageSection[]

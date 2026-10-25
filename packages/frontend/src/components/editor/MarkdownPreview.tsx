@@ -5,7 +5,8 @@ import remarkGfm from 'remark-gfm'
 import { api, isAttachmentUrl } from '../../lib/api'
 import { createRemarkHeadingIds } from '../../lib/anchors'
 import { resolveAttachmentObjectUrl } from '../../lib/attachmentCache'
-import { previewNavigationHref } from '../../lib/paths'
+import { findTreeNode, previewNavigationHref } from '../../lib/paths'
+import { useFilesStore } from '../../lib/store'
 import { parseImageWidth } from './imageWidths'
 import { MermaidDiagram } from './MermaidDiagram'
 import { CopyAnchorButton } from './CopyAnchorButton'
@@ -15,8 +16,8 @@ function isExternalUrl(href: string) {
   return /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')
 }
 
-function internalPathFor(href: string, pagePath: string): string | null {
-  const preview = previewNavigationHref(href, pagePath)
+function internalPathFor(href: string, pagePath: string, index: boolean): string | null {
+  const preview = previewNavigationHref(href, pagePath, index)
   if (preview) return preview
   if (!href) return null
   try {
@@ -117,12 +118,14 @@ type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
 function MarkdownHeading({
   level,
   pagePath,
+  pageIndex,
   children,
   node: _node,
   ...props
 }: ComponentPropsWithoutRef<'h2'> & {
   level: HeadingLevel
   pagePath: string
+  pageIndex: boolean
   node?: unknown
 }) {
   const Tag = `h${level}` as 'h2'
@@ -131,14 +134,14 @@ function MarkdownHeading({
   return (
     <Tag {...props} id={anchorId} className={`group scroll-my-0 ${props.className ?? ''}`.trim()}>
       {children}
-      {pagePath && anchorId ? <CopyAnchorButton variant="heading" pagePath={pagePath} anchorId={anchorId} name={name} /> : null}
+      {pagePath && anchorId ? <CopyAnchorButton variant="heading" pagePath={pagePath} pageIndex={pageIndex} anchorId={anchorId} name={name} /> : null}
     </Tag>
   )
 }
 
-function headingComponent(level: HeadingLevel, pagePath: string) {
+function headingComponent(level: HeadingLevel, pagePath: string, pageIndex: boolean) {
   return function Heading(props: ComponentPropsWithoutRef<'h2'> & { node?: unknown }) {
-    return <MarkdownHeading level={level} pagePath={pagePath} {...props} />
+    return <MarkdownHeading level={level} pagePath={pagePath} pageIndex={pageIndex} {...props} />
   }
 }
 
@@ -147,28 +150,32 @@ export function MarkdownPreview({
   compact = false,
   frameless = false,
   pagePath = '',
+  pageIndex,
   headingIds,
 }: {
   content: string
   compact?: boolean
   frameless?: boolean
   pagePath?: string
+  pageIndex?: boolean
   headingIds?: readonly string[]
 }) {
+  const tree = useFilesStore((state) => state.tree)
+  const index = pageIndex ?? Boolean(findTreeNode(tree, pagePath)?.index)
   const source = useMemo(() => preparePreviewMarkdown(content), [content])
   const remarkPlugins = useMemo(
     () => (headingIds ? [remarkGfm, createRemarkHeadingIds(headingIds)] : [remarkGfm]),
     [headingIds],
   )
   const components = useMemo(() => ({
-    h1: headingComponent(1, pagePath),
-    h2: headingComponent(2, pagePath),
-    h3: headingComponent(3, pagePath),
-    h4: headingComponent(4, pagePath),
-    h5: headingComponent(5, pagePath),
-    h6: headingComponent(6, pagePath),
+    h1: headingComponent(1, pagePath, index),
+    h2: headingComponent(2, pagePath, index),
+    h3: headingComponent(3, pagePath, index),
+    h4: headingComponent(4, pagePath, index),
+    h5: headingComponent(5, pagePath, index),
+    h6: headingComponent(6, pagePath, index),
     a: ({ href = '', children, ...props }: ComponentPropsWithoutRef<'a'>) => {
-      const internal = internalPathFor(href, pagePath)
+      const internal = internalPathFor(href, pagePath, index)
       if (internal) return <Link to={internal}>{children}</Link>
       if (isAttachmentUrl(href)) return <AttachmentLink href={href} {...props}>{children}</AttachmentLink>
       if (isExternalUrl(href)) return <a href={href} target="_blank" rel="noreferrer" {...props}>{children}</a>
@@ -185,7 +192,7 @@ export function MarkdownPreview({
         <table {...props}>{children}</table>
       </div>
     ),
-  }), [pagePath])
+  }), [index, pagePath])
 
   return (
     <article className={`markdown-preview ${compact ? 'markdown-preview-compact text-sm' : ''} text-text ${frameless ? '' : 'rounded-md border border-border bg-surface p-5'}`}>

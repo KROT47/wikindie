@@ -7,6 +7,7 @@ export interface TreeNode {
   name: string
   title: string
   path: string
+  index?: boolean
   type: 'page' | 'board'
   icon?: string
   order?: number
@@ -62,6 +63,7 @@ export async function buildTree(relativePath = ''): Promise<TreeNode[]> {
           name: entry.name,
           title: String(frontmatter.title ?? entry.name),
           path: rel,
+          index: true,
           type: frontmatter.kanban === true ? 'board' : 'page',
           icon: typeof frontmatter.icon === 'string' ? frontmatter.icon : undefined,
           ...(order !== undefined ? { order } : {}),
@@ -85,6 +87,7 @@ export async function buildTree(relativePath = ''): Promise<TreeNode[]> {
       name,
       title: String(frontmatter.title ?? name),
       path: pagePath,
+      index: false,
       type: frontmatter.kanban === true ? 'board' : 'page',
       icon: typeof frontmatter.icon === 'string' ? frontmatter.icon : undefined,
       ...(order !== undefined ? { order } : {}),

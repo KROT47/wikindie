@@ -211,47 +211,59 @@ test('relative page links round-trip the way the browser resolves /page/<path>',
   assert.equal(wiki.preserveRelativeHref('mailto:dev@example.com'), 'mailto:dev@example.com')
 })
 
-test('markdown file links stay under the current page and drop _Index.md in the UI', () => {
-  const cases = [
-    ['category', './X.md', '/page/category/X.md'],
-    ['category/nested', './X.md', '/page/category/nested/X.md'],
-    ['a/b/c', './X.md', '/page/a/b/c/X.md'],
-    ['a/b/c', '../X.md', '/page/a/b/X.md'],
-    ['a/b/c', '../../X.md', '/page/a/X.md'],
-    ['a/b/c', '../../../X.md', '/page/X.md'],
-    ['a/b/c', './d/e/X.md', '/page/a/b/c/d/e/X.md'],
-    ['category', 'X.md', '/page/category/X.md'],
-    ['category', '../X.md', '/page/X.md'],
-    ['Planning/Decision Log', './notes.md', '/page/Planning/Decision%20Log/notes.md'],
-    ['category', './Foo%20%28bar%29.md', '/page/category/Foo%20(bar).md'],
-    ['category', './X.md#part', '/page/category/X.md#part'],
-    ['', './ideas/_Index.md', '/page/ideas'],
-    ['category', './ideas/_Index.md', '/page/category/ideas'],
-    ['a/b', './nested/ideas/_Index.md', '/page/a/b/nested/ideas'],
-    ['a/b/c', '../ideas/_Index.md', '/page/a/b/ideas'],
-    ['a/b/c', '../../ideas/_Index.md', '/page/a/ideas'],
-    ['a/b/c', '../../../ideas/_Index.md', '/page/ideas'],
-    ['Workspace/Projects', './Atlas/_Index.md', '/page/Workspace/Projects/Atlas'],
-    ['Workspace/Projects/Atlas', '../_Index.md', '/page/Workspace/Projects'],
-    ['category', './_Index.md', '/page/category'],
-    ['category', './ideas/_Index.md#note', '/page/category/ideas#note'],
-    ['', './ideas/_Index.md#note', '/page/ideas#note'],
-  ]
-  for (const [from, href, target] of cases) {
-    assert.equal(paths.previewNavigationHref(href, from), target, `${href} from ${from || '(root)'}`)
-  }
+test('file and folder pages resolve relative links from the containing directory', () => {
+  const link = (href, from, index = false) => paths.previewNavigationHref(href, from, index)
 
-  assert.equal(paths.previewNavigationHref('/page/ideas/_Index.md', 'category'), '/page/ideas')
-  assert.equal(paths.previewNavigationHref('/page/ideas/_Index.md#note', 'Notes'), '/page/ideas#note')
-  assert.equal(paths.previewNavigationHref('./GAME_PROGRESSION', 'domain/ACTIVITY_LIFECYCLE'), '/page/domain/GAME_PROGRESSION')
-  assert.equal(paths.previewNavigationHref('ACTIVITY_LIFECYCLE/STEP', 'domain/ACTIVITY_LIFECYCLE'), '/page/domain/ACTIVITY_LIFECYCLE/STEP')
-  assert.equal(paths.previewNavigationHref('https://example.com/X.md', 'category'), null)
-  assert.equal(paths.previewNavigationHref('mailto:dev@example.com', 'category'), null)
-  assert.equal(paths.previewNavigationHref('../../../../X.md', 'a/b/c'), null)
+  assert.equal(link('./PRODUCT', 'product/ABOUT'), '/page/product/PRODUCT')
+  assert.equal(link('./PRODUCT.md', 'product/ABOUT'), '/page/product/PRODUCT.md')
+  assert.equal(link('../OTHER', 'product/ABOUT'), '/page/OTHER')
+  assert.equal(link('./ideas/_Index.md', 'product/ABOUT'), '/page/product/ideas')
+  assert.equal(link('./PRODUCT', 'ABOUT'), '/page/PRODUCT')
+  assert.equal(link('./ideas/_Index.md', 'ABOUT'), '/page/ideas')
+  assert.equal(link('./notes.md', 'Planning/Decision Log'), '/page/Planning/notes.md')
+  assert.equal(link('../X.md', 'a/b/c'), '/page/a/X.md')
+  assert.equal(link('../../X.md', 'a/b/c'), '/page/X.md')
+  assert.equal(link('../../../X.md', 'a/b/c'), null)
+  assert.equal(link('./d/e/X.md', 'a/b/c'), '/page/a/b/d/e/X.md')
+
+  assert.equal(link('./PRODUCT', 'product', true), '/page/product/PRODUCT')
+  assert.equal(link('./ABOUT.md', 'product', true), '/page/product/ABOUT.md')
+  assert.equal(link('../OTHER', 'product', true), '/page/OTHER')
+  assert.equal(link('./ideas/_Index.md', 'product', true), '/page/product/ideas')
+  assert.equal(link('./X.md', 'category', true), '/page/category/X.md')
+  assert.equal(link('./X.md#part', 'category', true), '/page/category/X.md#part')
+  assert.equal(link('./ideas/_Index.md#note', 'category', true), '/page/category/ideas#note')
+  assert.equal(link('./nested/ideas/_Index.md', 'a/b', true), '/page/a/b/nested/ideas')
+  assert.equal(link('../X.md', 'a/b/c', true), '/page/a/b/X.md')
+  assert.equal(link('../../X.md', 'a/b/c', true), '/page/a/X.md')
+  assert.equal(link('../../../X.md', 'a/b/c', true), '/page/X.md')
+  assert.equal(link('../../../../X.md', 'a/b/c', true), null)
+  assert.equal(link('./_Index.md', 'category', true), '/page/category')
+  assert.equal(link('../_Index.md', 'Workspace/Projects/Atlas', true), '/page/Workspace/Projects')
+  assert.equal(link('./PRODUCT', 'ABOUT', true), '/page/ABOUT/PRODUCT')
+
+  assert.equal(link('./ideas/_Index.md', ''), '/page/ideas')
+  assert.equal(link('./ideas/_Index.md#note', ''), '/page/ideas#note')
+  assert.equal(link('/page/ideas/_Index.md', 'product/ABOUT'), '/page/ideas')
+  assert.equal(link('./GAME_PROGRESSION', 'domain/ACTIVITY_LIFECYCLE'), '/page/domain/GAME_PROGRESSION')
+  assert.equal(link('ACTIVITY_LIFECYCLE/STEP', 'domain/ACTIVITY_LIFECYCLE'), '/page/domain/ACTIVITY_LIFECYCLE/STEP')
+  assert.equal(link('https://example.com/X.md', 'product/ABOUT'), null)
+  assert.equal(link('mailto:dev@example.com', 'category'), null)
+
+  assert.equal(paths.relativePageHref('product/ABOUT', 'product/PRODUCT'), './PRODUCT')
+  assert.equal(paths.relativePageHref('product', 'product/PRODUCT', true), './PRODUCT')
+  assert.equal(paths.pagePathFromHref('./PRODUCT', 'product/ABOUT'), 'product/PRODUCT')
+  assert.equal(paths.pagePathFromHref('./PRODUCT', 'product', true), 'product/PRODUCT')
+  assert.equal(paths.relativePageHref('product', paths.pagePathFromHref('./PRODUCT', 'product', true), true), './PRODUCT')
+  assert.equal(paths.relativePageHref('ABOUT', 'PRODUCT'), './PRODUCT')
+  assert.equal(wiki.protectWikiReferences('[[product/PRODUCT|Продукт]]', 'product/ABOUT'), '[Продукт](./PRODUCT)')
+  assert.equal(wiki.protectWikiReferences('[[product/PRODUCT|Продукт]]', 'product', true), '[Продукт](./PRODUCT)')
   assert.equal(
-    wiki.restoreProtectedWikiReferences('[X](./X.md)\n[Ideas](./ideas/_Index.md)\n[Up](../ideas/_Index.md#note)', 'category'),
-    '[X](./X.md)\n[Ideas](./ideas/_Index.md)\n[Up](../ideas/_Index.md#note)',
+    wiki.restoreProtectedWikiReferences('[X](./X.md)\n[Ideas](./ideas/_Index.md)', 'product/ABOUT'),
+    '[X](./X.md)\n[Ideas](./ideas/_Index.md)',
   )
+  assert.equal(anchors.relativeHeadingHref('product', 'overview', true), '../product#overview')
+  assert.equal(anchors.relativeHeadingHref('product/ABOUT', 'overview'), './ABOUT#overview')
 })
 
 test('page hrefs keep fragments out of the document path', () => {

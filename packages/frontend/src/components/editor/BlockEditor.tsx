@@ -15,7 +15,7 @@ import '@blocknote/shadcn/style.css'
 import './blocknote.css'
 import { api, isAttachmentUrl } from '../../lib/api'
 import { resolveAttachmentObjectUrl } from '../../lib/attachmentCache'
-import { previewNavigationHref } from '../../lib/paths'
+import { findTreeNode, previewNavigationHref } from '../../lib/paths'
 import { useFilesStore } from '../../lib/store'
 import { applyImageWidths, collectImageWidths, restoreImageWidths } from './imageWidths'
 import { pagePickerItems } from './pagePicker'
@@ -44,8 +44,8 @@ function isEditorNavigationHref(href: string) {
   return href.startsWith('/') || isRelativeHref(href)
 }
 
-function navigationHref(href: string, pagePath: string) {
-  return previewNavigationHref(href, pagePath) ?? (href.startsWith('/') ? href : null)
+function navigationHref(href: string, pagePath: string, index: boolean) {
+  return previewNavigationHref(href, pagePath, index) ?? (href.startsWith('/') ? href : null)
 }
 
 function anchorFromEvent(event: Event) {
@@ -58,17 +58,23 @@ function anchorFromEvent(event: Event) {
 type Props = {
   pageId?: string
   pagePath?: string
+  pageIndex?: boolean
   value: string
   onChange: (markdown: string) => void
   editable?: boolean
   className?: string
 }
 
-export function BlockEditor({ pageId, pagePath = '', value, onChange, editable = true, className }: Props) {
+export function BlockEditor({ pageId, pagePath = '', pageIndex, value, onChange, editable = true, className }: Props) {
+  const navigate = useNavigate()
+  const tree = useFilesStore((state) => state.tree)
+  const folder = pageIndex ?? Boolean(findTreeNode(tree, pagePath)?.index)
   const pagePathRef = useRef(pagePath)
   const editableRef = useRef(editable)
+  const folderRef = useRef(folder)
   pagePathRef.current = pagePath
   editableRef.current = editable
+  folderRef.current = folder
   const editor = useCreateBlockNote({
     links: {
       isValidLink: isValidWikindieLink,
@@ -89,19 +95,19 @@ export function BlockEditor({ pageId, pagePath = '', value, onChange, editable =
     const editLink = editor.editLink.bind(editor)
     editor.editLink = (url, text, position) => editLink(preserveRelativeHref(url), text, position)
   }
-  const navigate = useNavigate()
-  const tree = useFilesStore((state) => state.tree)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const lastEmittedMd = useRef<string>(value)
   const seededPath = useRef(pagePath)
+  const seededFolder = useRef(folder)
   const isReseeding = useRef(false)
   const seeded = useRef(false)
 
   useEffect(() => {
-    if (seeded.current && value === lastEmittedMd.current && pagePath === seededPath.current) return
+    if (seeded.current && value === lastEmittedMd.current && pagePath === seededPath.current && folder === seededFolder.current) return
     seeded.current = true
     seededPath.current = pagePath
-    const parsed = editor.tryParseMarkdownToBlocks(protectWikiReferences(value, pagePath))
+    seededFolder.current = folder
+    const parsed = editor.tryParseMarkdownToBlocks(protectWikiReferences(value, pagePath, folder))
     restoreImageWidths(parsed)
     const blocks = parsed.length ? parsed : [{ type: 'paragraph' as const }]
     isReseeding.current = true
@@ -110,18 +116,18 @@ export function BlockEditor({ pageId, pagePath = '', value, onChange, editable =
     queueMicrotask(() => {
       isReseeding.current = false
     })
-  }, [editor, pagePath, value])
+  }, [editor, folder, pagePath, value])
 
   const handleChange = useCallback(() => {
     if (isReseeding.current) return
     const md = applyImageWidths(
-      restoreProtectedWikiReferences(editor.blocksToMarkdownLossy(editor.document), pagePath),
+      restoreProtectedWikiReferences(editor.blocksToMarkdownLossy(editor.document), pagePath, folder),
       collectImageWidths(editor.document),
     )
     if (md === lastEmittedMd.current) return
     lastEmittedMd.current = md
     onChange(md)
-  }, [editor, onChange, pagePath])
+  }, [editor, folder, onChange, pagePath])
 
   useEffect(() => {
     const root = wrapperRef.current
@@ -140,7 +146,7 @@ export function BlockEditor({ pageId, pagePath = '', value, onChange, editable =
         event.preventDefault()
         return
       }
-      const destination = navigationHref(href, pagePathRef.current)
+      const destination = navigationHref(href, pagePathRef.current, folderRef.current)
       if (!destination) return
       event.preventDefault()
       event.stopPropagation()
@@ -211,7 +217,7 @@ export function BlockEditor({ pageId, pagePath = '', value, onChange, editable =
         />
         <SuggestionMenuController
           triggerCharacter="[["
-          getItems={async (query) => pagePickerItems(editor, tree, query, pagePath)}
+          getItems={async (query) => pagePickerItems(editor, tree, query, pagePath, folder)}
         />
         <GridSuggestionMenuController
           triggerCharacter=":"

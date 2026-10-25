@@ -33,14 +33,17 @@ function unwrapMarkdownHref(href: string) {
   return trimmed
 }
 
-function pageLinkBase(fromPagePath: string) {
-  return new URL(pageUrl(fromPagePath), PAGE_LINK_ORIGIN)
+// A folder page is `product/_Index.md`: links resolve inside `product`.
+// A file page is `product/ABOUT.md`: links resolve inside `product`, not `ABOUT`.
+function containingDirectory(pagePath: string, index: boolean) {
+  const segments = pageSegments(pagePath)
+  if (!index) segments.pop()
+  return segments.join('/')
 }
 
-// A `.md` link is a file path. The current page is its directory, so `./X.md`
-// on `/page/category` stays `/page/category/X.md` instead of replacing `category`.
-function pageDirectoryBase(fromPagePath: string) {
-  const url = pageLinkBase(fromPagePath)
+function pageDirectoryBase(fromPagePath: string, index = false) {
+  const directory = containingDirectory(fromPagePath, index)
+  const url = new URL(directory ? pageUrl(directory) : '/page/', PAGE_LINK_ORIGIN)
   if (!url.pathname.endsWith('/')) url.pathname += '/'
   return url
 }
@@ -57,11 +60,11 @@ function withoutIndexFile(pagePath: string) {
   return pagePath.endsWith('/_Index.md') ? pagePath.slice(0, -'/_Index.md'.length) : pagePath
 }
 
-function markdownFilePageTarget(href: string, fromPagePath: string): ParsedPageHref | null {
+function markdownFilePageTarget(href: string, fromPagePath: string, index = false): ParsedPageHref | null {
   const normalized = markdownFilePath(href)
   if (!normalized) return null
   try {
-    const url = new URL(normalized, pageDirectoryBase(fromPagePath))
+    const url = new URL(normalized, pageDirectoryBase(fromPagePath, index))
     if (url.origin !== PAGE_LINK_ORIGIN || !url.pathname.startsWith('/page/')) return null
     const path = withoutIndexFile(pagePathFromLocation(url.pathname))
     if (!path) return null
@@ -85,11 +88,10 @@ function pageHrefWithoutIndexFile(href: string) {
   }
 }
 
-// The address bar is `/page/<path>` with no trailing slash, so the last segment
-// is the page name. A relative link is resolved from that URL's parent, which
-// is how the browser treats an `<a href>` on the page.
-export function relativePageHref(fromPagePath: string, toPagePath: string) {
-  const fromDir = pageSegments(fromPagePath).slice(0, -1)
+// Extension-less links use the same directory as `.md` links. A file page
+// contributes its parent; a folder page (`index`) contributes itself.
+export function relativePageHref(fromPagePath: string, toPagePath: string, index = false) {
+  const fromDir = pageSegments(containingDirectory(fromPagePath, index))
   const toSegments = pageSegments(toPagePath)
   let common = 0
   while (common < fromDir.length && common < toSegments.length && fromDir[common] === toSegments[common]) common += 1
@@ -111,11 +113,11 @@ export type ParsedPageHref = {
   suffix: string
 }
 
-export function parsePageHref(href: string, fromPagePath: string): ParsedPageHref | null {
+export function parsePageHref(href: string, fromPagePath: string, index = false): ParsedPageHref | null {
   const normalized = unwrapMarkdownHref(href)
   if (!normalized || normalized.startsWith('#') || normalized.startsWith('//') || PAGE_LINK_SCHEME.test(normalized)) return null
   try {
-    const url = new URL(normalized, pageLinkBase(fromPagePath))
+    const url = new URL(normalized, pageDirectoryBase(fromPagePath, index))
     if (url.origin !== PAGE_LINK_ORIGIN || !url.pathname.startsWith('/page/')) return null
     const path = pagePathFromLocation(url.pathname)
     if (!path) return null
@@ -126,19 +128,19 @@ export function parsePageHref(href: string, fromPagePath: string): ParsedPageHre
   }
 }
 
-export function pagePathFromHref(href: string, fromPagePath: string) {
-  return parsePageHref(href, fromPagePath)?.path ?? null
+export function pagePathFromHref(href: string, fromPagePath: string, index = false) {
+  return parsePageHref(href, fromPagePath, index)?.path ?? null
 }
 
 // Preview navigation for a markdown href. Fragments stay on the suffix and are
 // never part of the page path. Hash-only links stay on `pagePath`.
-export function previewNavigationHref(href: string, pagePath: string): string | null {
+export function previewNavigationHref(href: string, pagePath: string, index = false): string | null {
   if (!href) return null
   if (pagePath && href.startsWith('#')) return `${pageUrl(pagePath)}${href}`
-  const markdownFile = markdownFilePageTarget(href, pagePath)
+  const markdownFile = markdownFilePageTarget(href, pagePath, index)
   if (markdownFile) return `${pageUrl(markdownFile.path)}${markdownFile.suffix}`
   if (pagePath) {
-    const parsed = parsePageHref(href, pagePath)
+    const parsed = parsePageHref(href, pagePath, index)
     if (parsed) {
       const path = withoutIndexFile(parsed.path)
       if (!path) return null

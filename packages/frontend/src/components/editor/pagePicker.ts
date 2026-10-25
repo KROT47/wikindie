@@ -25,9 +25,9 @@ function pageGlyph(page: FlatPage): string {
   return resolveWikiIcon(fallback)?.glyph ?? '📄'
 }
 
-function insertPageLink(editor: BlockNoteEditor<any, any, any>, page: FlatPage, pagePath: string) {
+function insertPageLink(editor: BlockNoteEditor<any, any, any>, page: FlatPage, pagePath: string, index: boolean) {
   editor.insertInlineContent([
-    { type: 'link', href: relativePageHref(pagePath, page.path), content: page.title },
+    { type: 'link', href: relativePageHref(pagePath, page.path, index), content: page.title },
     ' ',
   ])
 }
@@ -37,6 +37,7 @@ export function pagePickerItems(
   tree: TreeNode[],
   query: string,
   pagePath: string,
+  index = false,
 ): DefaultReactSuggestionItem[] {
   const pages = flattenTree(tree)
   const items = pages.map<DefaultReactSuggestionItem>((page) => ({
@@ -45,7 +46,7 @@ export function pagePickerItems(
     aliases: [page.path, ...page.path.split('/')],
     group: page.type === 'board' ? 'Boards' : 'Pages',
     icon: createElement('span', { className: 'text-base leading-none' }, pageGlyph(page)),
-    onItemClick: () => insertPageLink(editor, page, pagePath),
+    onItemClick: () => insertPageLink(editor, page, pagePath, index),
   }))
   return filterSuggestionItems(items, query)
 }

@@ -38,6 +38,7 @@ export interface PageSection {
 export interface PageBundle extends MarkdownFile {
   id: string
   path: string
+  index: boolean
   type: 'page' | 'board'
   diskSizeBytes: number
   sections: Array<{ title: string; path: string; content: string }>
@@ -340,6 +341,7 @@ export async function readPage(pagePath: string): Promise<PageBundle> {
     ...page,
     id: page.id,
     path: resolved.pagePath,
+    index: resolved.index,
     type: page.frontmatter.kanban === true ? 'board' : 'page',
     diskSizeBytes: pageDiskSizeBytes + sectionDiskSizeBytes,
     sections: loadedSections.map((item) => item.section),

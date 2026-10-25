@@ -152,8 +152,8 @@ export function anchorHref(pagePath: string, id: string, origin: string) {
 }
 
 // Same-page heading link in the form the editor stores, for example `./Guide#installation`.
-export function relativeHeadingHref(pagePath: string, id: string) {
-  return `${relativePageHref(pagePath, pagePath)}#${id}`
+export function relativeHeadingHref(pagePath: string, id: string, index = false) {
+  return `${relativePageHref(pagePath, pagePath, index)}#${id}`
 }
 
 export function scrollAnchorIntoView(container: HTMLElement, target: HTMLElement) {

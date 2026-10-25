@@ -6,11 +6,13 @@ import { Button } from '../ui/Button'
 
 export function CopyAnchorButton({
   pagePath,
+  pageIndex = false,
   anchorId,
   name,
   variant,
 }: {
   pagePath: string
+  pageIndex?: boolean
   anchorId: string
   name: string
   variant: 'heading' | 'section'
@@ -27,7 +29,7 @@ export function CopyAnchorButton({
 
   const copy = async () => {
     const href = variant === 'heading'
-      ? relativeHeadingHref(pagePath, anchorId)
+      ? relativeHeadingHref(pagePath, anchorId, pageIndex)
       : anchorHref(pagePath, anchorId, window.location.origin)
     try {
       await navigator.clipboard.writeText(href)

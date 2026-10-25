@@ -534,6 +534,7 @@ export function Editor({
                 <BlockEditor
                   pageId={page.id}
                   pagePath={page.path}
+                  pageIndex={page.index}
                   className="min-h-[52vh] w-full"
                   value={content}
                   onChange={(md) => {
@@ -545,7 +546,7 @@ export function Editor({
             </div>
           ) : (
             <div className="mb-10">
-              <MarkdownPreview content={savedContent} frameless pagePath={page.path} headingIds={anchorPlan.bodyHeadingIds} />
+              <MarkdownPreview content={savedContent} frameless pagePath={page.path} pageIndex={page.index} headingIds={anchorPlan.bodyHeadingIds} />
             </div>
           )}
 
@@ -617,6 +618,7 @@ export function Editor({
                       <BlockEditor
                         pageId={page.id}
                         pagePath={page.path}
+                        pageIndex={page.index}
                         className="min-h-[180px] w-full"
                         value={draft.content}
                         onChange={(md) => setSectionDrafts((prev) => ({ ...prev, [section.path]: { ...draft, content: md } }))}
@@ -624,7 +626,7 @@ export function Editor({
                     </Suspense>
                   </div>
                 ) : (
-                  <MarkdownPreview content={draft.content} frameless pagePath={page.path} headingIds={sectionAnchor?.headingIds} />
+                  <MarkdownPreview content={draft.content} frameless pagePath={page.path} pageIndex={page.index} headingIds={sectionAnchor?.headingIds} />
                 )}
               </article>
             )

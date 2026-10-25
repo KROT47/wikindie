@@ -6,15 +6,15 @@ function escapeMarkdownLinkText(value: string) {
   return value.replace(/[\\[\]]/g, '\\$&')
 }
 
-function protectedReferenceFor(value: string, pagePath: string) {
+function protectedReferenceFor(value: string, pagePath: string, index: boolean) {
   const [rawPath, ...rawLabel] = value.split('|')
   const path = rawPath.trim()
   if (!path) return `[[${value}]]`
   const label = rawLabel.length ? rawLabel.join('|').trim() || path : path
-  return `[${escapeMarkdownLinkText(label)}](${relativePageHref(pagePath, path)})`
+  return `[${escapeMarkdownLinkText(label)}](${relativePageHref(pagePath, path, index)})`
 }
 
-function protectReferencesInLine(line: string, pagePath: string) {
+function protectReferencesInLine(line: string, pagePath: string, folder: boolean) {
   let result = ''
   let index = 0
 
@@ -33,7 +33,7 @@ function protectReferencesInLine(line: string, pagePath: string) {
     if (line.startsWith('[[', index)) {
       const end = line.indexOf(']]', index + 2)
       if (end >= 0) {
-        result += protectedReferenceFor(line.slice(index + 2, end), pagePath)
+        result += protectedReferenceFor(line.slice(index + 2, end), pagePath, folder)
         index = end + 2
         continue
       }
@@ -46,8 +46,8 @@ function protectReferencesInLine(line: string, pagePath: string) {
   return result
 }
 
-export function protectWikiReferences(value: string, pagePath: string) {
-  return replaceOutsideCode(value, (segment) => segment.split('\n').map((line) => protectReferencesInLine(line, pagePath)).join('\n'))
+export function protectWikiReferences(value: string, pagePath: string, index = false) {
+  return replaceOutsideCode(value, (segment) => segment.split('\n').map((line) => protectReferencesInLine(line, pagePath, index)).join('\n'))
 }
 
 function isFilesystemMarkdownHref(href: string) {
@@ -58,19 +58,19 @@ function isFilesystemMarkdownHref(href: string) {
   return path.endsWith('.md')
 }
 
-function restoredReferenceFor(label: string, href: string, fallback: string, pagePath: string) {
+function restoredReferenceFor(label: string, href: string, fallback: string, pagePath: string, index: boolean) {
   // File links such as `./X.md` and `./ideas/_Index.md` stay in the Markdown.
   // The UI drops `_Index.md` only when it builds the `/page/...` route.
   if (isFilesystemMarkdownHref(href)) return fallback
-  const parsed = parsePageHref(href, pagePath)
+  const parsed = parsePageHref(href, pagePath, index)
   if (!parsed) return fallback
-  return `[${label}](${relativePageHref(pagePath, parsed.path)}${parsed.suffix})`
+  return `[${label}](${relativePageHref(pagePath, parsed.path, index)}${parsed.suffix})`
 }
 
-export function restoreProtectedWikiReferences(value: string, pagePath: string) {
+export function restoreProtectedWikiReferences(value: string, pagePath: string, index = false) {
   return replaceOutsideCode(value, (segment) => segment.replace(
     /\[((?:\\.|[^\\\]\n])*)\]\(([^)\n]+)\)/g,
-    (match, label: string, href: string) => restoredReferenceFor(label, href, match, pagePath),
+    (match, label: string, href: string) => restoredReferenceFor(label, href, match, pagePath, index),
   ))
 }
 
