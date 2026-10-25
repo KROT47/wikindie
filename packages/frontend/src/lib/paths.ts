@@ -23,8 +23,30 @@ function pageSegments(pagePath: string) {
 }
 
 function encodeHrefSegment(segment: string) {
-  // encodeURIComponent leaves parentheses, which would end a Markdown link.
-  return encodeURIComponent(segment).replace(/[()]/g, (char) => (char === '(' ? '%28' : '%29'))
+  // Unicode stays literal in the saved Markdown. ASCII still uses percent-encoding,
+  // and parentheses are encoded because encodeURIComponent leaves them to end a link.
+  let encoded = ''
+  for (const char of segment) {
+    if ((char.codePointAt(0) ?? 0) > 0x7f) {
+      encoded += char
+      continue
+    }
+    encoded += encodeURIComponent(char).replace(/[()]/g, (item) => (item === '(' ? '%28' : '%29'))
+  }
+  return encoded
+}
+
+// Turn percent-encoded UTF-8 back into characters. ASCII escapes such as %20 stay.
+export function preserveUnicodeInHref(href: string) {
+  return href.replace(/%(?:[0-9A-Fa-f]{2})(?:%[0-9A-Fa-f]{2})*/g, (sequence) => {
+    try {
+      const decoded = decodeURIComponent(sequence)
+      if (![...decoded].some((char) => (char.codePointAt(0) ?? 0) > 0x7f)) return sequence
+      return encodeHrefSegment(decoded)
+    } catch {
+      return sequence
+    }
+  })
 }
 
 function unwrapMarkdownHref(href: string) {
@@ -82,8 +104,8 @@ function markdownFilePageTarget(href: string, fromPagePath: string, index = fals
     if (url.origin !== PAGE_LINK_ORIGIN || !url.pathname.startsWith('/page/')) return null
     const path = withoutIndexFile(pagePathFromLocation(url.pathname))
     if (!path) return null
-    const hash = url.hash === WIKI_REFERENCE_HASH ? '' : url.hash
-    return { path, suffix: url.search + hash }
+    const hash = url.hash === WIKI_REFERENCE_HASH ? '' : preserveUnicodeInHref(url.hash)
+    return { path, suffix: preserveUnicodeInHref(url.search) + hash }
   } catch {
     return null
   }
@@ -135,8 +157,8 @@ export function parsePageHref(href: string, fromPagePath: string, index = false)
     if (url.origin !== PAGE_LINK_ORIGIN || !url.pathname.startsWith('/page/')) return null
     const path = pagePathFromLocation(url.pathname)
     if (!path) return null
-    const hash = url.hash === WIKI_REFERENCE_HASH ? '' : url.hash
-    return { path, suffix: url.search + hash }
+    const hash = url.hash === WIKI_REFERENCE_HASH ? '' : preserveUnicodeInHref(url.hash)
+    return { path, suffix: preserveUnicodeInHref(url.search) + hash }
   } catch {
     return null
   }

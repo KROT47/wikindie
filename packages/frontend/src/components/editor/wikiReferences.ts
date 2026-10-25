@@ -1,6 +1,6 @@
 import { replaceOutsideCode } from '../../lib/markdownSegments'
 import { renderIconShortcodes } from '../../lib/icons'
-import { pageUrl, parsePageHref, relativePageHref } from '../../lib/paths'
+import { pageUrl, parsePageHref, preserveUnicodeInHref, relativePageHref } from '../../lib/paths'
 
 function escapeMarkdownLinkText(value: string) {
   return value.replace(/[\\[\]]/g, '\\$&')
@@ -58,12 +58,17 @@ function isFilesystemMarkdownHref(href: string) {
   return path.endsWith('.md')
 }
 
+function withReadableHref(label: string, href: string, fallback: string) {
+  const readable = preserveUnicodeInHref(href)
+  return readable === href ? fallback : `[${label}](${readable})`
+}
+
 function restoredReferenceFor(label: string, href: string, fallback: string, pagePath: string, index: boolean) {
   // File links such as `./X.md` and `./ideas/_Index.md` stay in the Markdown.
   // The UI drops `_Index.md` only when it builds the `/page/...` route.
-  if (isFilesystemMarkdownHref(href)) return fallback
+  if (isFilesystemMarkdownHref(href)) return withReadableHref(label, href, fallback)
   const parsed = parsePageHref(href, pagePath, index)
-  if (!parsed) return fallback
+  if (!parsed) return withReadableHref(label, href, fallback)
   return `[${label}](${relativePageHref(pagePath, parsed.path, index)}${parsed.suffix})`
 }
 

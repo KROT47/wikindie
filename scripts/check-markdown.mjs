@@ -160,6 +160,9 @@ test('relative page links round-trip the way the browser resolves /page/<path>',
     ['Planning/Decision Log', 'domain/ACTIVITY_LIFECYCLE', '../domain/ACTIVITY_LIFECYCLE'],
     ['Planning/Notes', 'Planning/Decision Log', './Decision%20Log'],
     ['domain/ACTIVITY_LIFECYCLE', 'domain/Foo (bar)', './Foo%20%28bar%29'],
+    ['Planning/Notes', 'Planning/Журнал', './Журнал'],
+    ['Planning/Notes', 'Planning/Журнал решений', './Журнал%20решений'],
+    ['Notes', 'Страница (черновик)', './Страница%20%28черновик%29'],
     ['Workspace', 'Workspace/Projects', 'Workspace/Projects'],
     ['Workspace', 'Other', './Other'],
     ['a/b/c', 'a', '../../a'],
@@ -225,6 +228,24 @@ test('relative page links round-trip the way the browser resolves /page/<path>',
   assert.equal(wiki.hrefForEditorLink('https://example.com/docs', 'Notes'), 'https://example.com/docs')
   assert.equal(wiki.hrefForEditorLink('https://./GAME_PROGRESSION', 'domain/ACTIVITY_LIFECYCLE'), './GAME_PROGRESSION')
   assert.equal(wiki.hrefForEditorLink('./ideas/_Index.md', 'product/ABOUT'), './ideas/_Index.md')
+  assert.equal(paths.previewNavigationHref('./Журнал', 'Notes'), '/page/%D0%96%D1%83%D1%80%D0%BD%D0%B0%D0%BB')
+  assert.equal(paths.previewNavigationHref('./Журнал#установка', 'Notes'), '/page/%D0%96%D1%83%D1%80%D0%BD%D0%B0%D0%BB#установка')
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[Журнал](./%D0%96%D1%83%D1%80%D0%BD%D0%B0%D0%BB%20%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B9)', 'Notes'),
+    '[Журнал](./Журнал%20решений)',
+  )
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[сайт](https://example.com/%D0%BF%D1%83%D1%82%D1%8C)', 'Notes'),
+    '[сайт](https://example.com/путь)',
+  )
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[файл](./%D0%B8%D0%B4%D0%B5%D0%B8.md)', 'Notes'),
+    '[файл](./идеи.md)',
+  )
+  assert.equal(
+    wiki.protectWikiReferences('[[Planning/Журнал решений|Запись]]', 'Planning/Notes'),
+    '[Запись](./Журнал%20решений)',
+  )
 })
 
 test('file and folder pages resolve relative links from the containing directory', () => {
@@ -305,7 +326,7 @@ test('page hrefs keep fragments out of the document path', () => {
   )
   assert.equal(
     wiki.restoreProtectedWikiReferences('[Установка](https://wiki.example/page/Planning/Decision%20Log#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0)', 'Planning/Notes'),
-    '[Установка](./Decision%20Log#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0)',
+    '[Установка](./Decision%20Log#установка)',
   )
   assert.equal(
     wiki.restoreProtectedWikiReferences('[site](https://example.com/docs)', 'Notes'),
