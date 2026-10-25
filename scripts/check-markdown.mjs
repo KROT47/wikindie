@@ -332,9 +332,14 @@ test('page hrefs keep fragments out of the document path', () => {
   assert.equal(anchors.relativeHeadingHref('Guide', 'installation'), './Guide#installation')
   assert.equal(anchors.relativeHeadingHref('Planning/Decision Log', 'установка'), './Decision%20Log#установка')
   const href = anchors.anchorHref('Planning/Decision Log', 'установка', 'http://localhost:5173')
+  assert.equal(href, 'http://localhost:5173/page/Planning/Decision Log#установка')
   const url = new URL(href)
   assert.equal(url.pathname, '/page/Planning/Decision%20Log')
   assert.equal(anchors.decodeFragment(url.hash), 'установка')
+  assert.equal(
+    anchors.anchorHref('Журнал/Решения', 'section-операции', 'http://localhost:5173'),
+    'http://localhost:5173/page/Журнал/Решения#section-операции',
+  )
   assert.equal(anchors.decodeFragment('#installation'), 'installation')
   assert.equal(anchors.decodeFragment(''), '')
   assert.equal(anchors.decodeFragment('#%'), '%')

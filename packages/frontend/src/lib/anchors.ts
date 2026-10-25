@@ -147,8 +147,9 @@ export function decodeFragment(hash: string) {
 
 export function anchorHref(pagePath: string, id: string, origin: string) {
   const url = new URL(pageUrl(pagePath), origin)
-  url.hash = id
-  return url.href
+  // `URL.href` percent-encodes the path and fragment. The clipboard link keeps
+  // spaces and Unicode as characters, for example `#установка`.
+  return `${url.origin}${decodeURI(url.pathname)}#${id}`
 }
 
 // Same-page heading link in the form the editor stores, for example `./Guide#installation`.
