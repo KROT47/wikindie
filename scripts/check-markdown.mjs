@@ -176,6 +176,10 @@ test('relative page links round-trip the way the browser resolves /page/<path>',
 
   assert.equal(paths.pageUrl('Planning/Decision Log'), '/page/Planning/Decision%20Log')
   assert.equal(paths.pagePathFromLocation('/page/domain/ACTIVITY_LIFECYCLE'), 'domain/ACTIVITY_LIFECYCLE')
+  assert.equal(paths.canonicalPagePath('decisions/DECISIONS.md'), 'decisions/DECISIONS')
+  assert.equal(paths.canonicalPagePath('decisions/DECISIONS'), paths.canonicalPagePath('decisions/DECISIONS.md'))
+  assert.equal(paths.canonicalPagePath('ideas/_Index.md'), 'ideas')
+  assert.equal(paths.canonicalPagePath('category/X.md'), 'category/X')
   assert.equal(paths.pagePathFromHref('https://example.com/docs', 'Notes'), null)
   assert.equal(paths.pagePathFromHref('mailto:dev@example.com', 'Notes'), null)
   assert.equal(paths.pagePathFromHref('/api/attachments/pg_1/file.png', 'Notes'), null)

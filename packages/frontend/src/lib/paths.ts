@@ -13,6 +13,12 @@ export function pagePathFromLocation(pathname: string) {
   }
 }
 
+// The address can keep a file suffix (`DECISIONS.md`, `ideas/_Index.md`) while the
+// loaded page path does not. Both name the same page.
+export function canonicalPagePath(path: string) {
+  return path.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\.md$/, '').replace(/\/_Index$/, '').replace(/\/+$/, '')
+}
+
 const PAGE_LINK_ORIGIN = 'http://wikindie.local'
 const PAGE_LINK_SCHEME = /^[a-z][a-z0-9+.-]*:/i
 // Sentinel stored on editor links in older documents. It is not a heading anchor.

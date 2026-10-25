@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, type PageBundle, type PageSection } from '../../lib/api'
 import { assignPageAnchors, decodeFragment, scrollAnchorIntoView } from '../../lib/anchors'
 import { useMobileTaskPanel } from '../layout/AppLayout'
-import { breadcrumbsFromPath, findTreeNode, goBack, pageNameFromPath, pageUrl } from '../../lib/paths'
+import { breadcrumbsFromPath, canonicalPagePath, findTreeNode, goBack, pageNameFromPath, pageUrl } from '../../lib/paths'
 import { canDelete, canWrite, useAuthStore, useFilesStore } from '../../lib/store'
 import { ActionMenu, ActionMenuItem } from '../ui/ActionMenu'
 import { Button } from '../ui/Button'
@@ -151,7 +151,7 @@ export function Editor({
       return
     }
     if (lastNav.current === navKey && scrolledKey.current === navKey) return
-    if (anchorLoad.path !== page.path || anchorLoad.id === 0) return
+    if (canonicalPagePath(anchorLoad.path) !== canonicalPagePath(page.path) || anchorLoad.id === 0) return
 
     const root = scrollRef.current
     const target = document.getElementById(fragment)
