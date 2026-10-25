@@ -209,6 +209,17 @@ test('relative page links round-trip the way the browser resolves /page/<path>',
   assert.equal(wiki.preserveRelativeHref('https://ACTIVITY_LIFECYCLE/STEP'), 'ACTIVITY_LIFECYCLE/STEP')
   assert.equal(wiki.preserveRelativeHref('https://example.com/docs'), 'https://example.com/docs')
   assert.equal(wiki.preserveRelativeHref('mailto:dev@example.com'), 'mailto:dev@example.com')
+  assert.equal(
+    wiki.hrefForEditorLink('http://localhost:5173/page/Guide#installation', 'Notes'),
+    './Guide#installation',
+  )
+  assert.equal(
+    wiki.hrefForEditorLink('https://wiki.example/page/product#overview', 'product', true),
+    '../product#overview',
+  )
+  assert.equal(wiki.hrefForEditorLink('https://example.com/docs', 'Notes'), 'https://example.com/docs')
+  assert.equal(wiki.hrefForEditorLink('https://./GAME_PROGRESSION', 'domain/ACTIVITY_LIFECYCLE'), './GAME_PROGRESSION')
+  assert.equal(wiki.hrefForEditorLink('./ideas/_Index.md', 'product/ABOUT'), './ideas/_Index.md')
 })
 
 test('file and folder pages resolve relative links from the containing directory', () => {
@@ -283,6 +294,20 @@ test('page hrefs keep fragments out of the document path', () => {
     wiki.restoreProtectedWikiReferences('[Установка](/page/Guide#installation)', 'Notes'),
     '[Установка](./Guide#installation)',
   )
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[Установка](http://localhost:5173/page/Guide#installation)', 'Notes'),
+    '[Установка](./Guide#installation)',
+  )
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[Установка](https://wiki.example/page/Planning/Decision%20Log#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0)', 'Planning/Notes'),
+    '[Установка](./Decision%20Log#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0)',
+  )
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[site](https://example.com/docs)', 'Notes'),
+    '[site](https://example.com/docs)',
+  )
+  assert.equal(paths.parsePageHref('http://localhost:5173/page/Guide#installation', 'Notes').path, 'Guide')
+  assert.equal(paths.pagePathFromHref('https://example.com/docs', 'Notes'), null)
   assert.equal(
     wiki.restoreProtectedWikiReferences('[Установка](./Guide#installation)', 'Notes'),
     '[Установка](./Guide#installation)',

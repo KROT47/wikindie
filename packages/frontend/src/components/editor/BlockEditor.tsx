@@ -19,7 +19,7 @@ import { findTreeNode, previewNavigationHref } from '../../lib/paths'
 import { useFilesStore } from '../../lib/store'
 import { applyImageWidths, collectImageWidths, restoreImageWidths } from './imageWidths'
 import { pagePickerItems } from './pagePicker'
-import { preserveRelativeHref, protectWikiReferences, restoreProtectedWikiReferences } from './wikiReferences'
+import { hrefForEditorLink, protectWikiReferences, restoreProtectedWikiReferences } from './wikiReferences'
 
 const HIDDEN_SLASH_ITEMS = new Set(['Audio', 'Video'])
 
@@ -93,7 +93,7 @@ export function BlockEditor({ pageId, pagePath = '', pageIndex, value, onChange,
   if (patchedEditor.current !== editor) {
     patchedEditor.current = editor
     const editLink = editor.editLink.bind(editor)
-    editor.editLink = (url, text, position) => editLink(preserveRelativeHref(url), text, position)
+    editor.editLink = (url, text, position) => editLink(hrefForEditorLink(url, pagePathRef.current, folderRef.current), text, position)
   }
   const wrapperRef = useRef<HTMLDivElement>(null)
   const lastEmittedMd = useRef<string>(value)

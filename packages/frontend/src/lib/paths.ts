@@ -33,6 +33,20 @@ function unwrapMarkdownHref(href: string) {
   return trimmed
 }
 
+// A copied heading link is an absolute URL. Drop the origin when the path is a
+// wiki page so the rest of the parser can treat it like `/page/...`.
+function pageReferenceHref(href: string) {
+  const normalized = unwrapMarkdownHref(href)
+  if (!/^https?:\/\//i.test(normalized)) return normalized
+  try {
+    const url = new URL(normalized)
+    if (!url.pathname.startsWith('/page/')) return normalized
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return normalized
+  }
+}
+
 // A folder page is `product/_Index.md`: links resolve inside `product`.
 // A file page is `product/ABOUT.md`: links resolve inside `product`, not `ABOUT`.
 function containingDirectory(pagePath: string, index: boolean) {
@@ -114,7 +128,7 @@ export type ParsedPageHref = {
 }
 
 export function parsePageHref(href: string, fromPagePath: string, index = false): ParsedPageHref | null {
-  const normalized = unwrapMarkdownHref(href)
+  const normalized = pageReferenceHref(href)
   if (!normalized || normalized.startsWith('#') || normalized.startsWith('//') || PAGE_LINK_SCHEME.test(normalized)) return null
   try {
     const url = new URL(normalized, pageDirectoryBase(fromPagePath, index))

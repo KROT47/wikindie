@@ -118,14 +118,12 @@ type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
 function MarkdownHeading({
   level,
   pagePath,
-  pageIndex,
   children,
   node: _node,
   ...props
 }: ComponentPropsWithoutRef<'h2'> & {
   level: HeadingLevel
   pagePath: string
-  pageIndex: boolean
   node?: unknown
 }) {
   const Tag = `h${level}` as 'h2'
@@ -134,14 +132,14 @@ function MarkdownHeading({
   return (
     <Tag {...props} id={anchorId} className={`group scroll-my-0 ${props.className ?? ''}`.trim()}>
       {children}
-      {pagePath && anchorId ? <CopyAnchorButton variant="heading" pagePath={pagePath} pageIndex={pageIndex} anchorId={anchorId} name={name} /> : null}
+      {pagePath && anchorId ? <CopyAnchorButton variant="heading" pagePath={pagePath} anchorId={anchorId} name={name} /> : null}
     </Tag>
   )
 }
 
-function headingComponent(level: HeadingLevel, pagePath: string, pageIndex: boolean) {
+function headingComponent(level: HeadingLevel, pagePath: string) {
   return function Heading(props: ComponentPropsWithoutRef<'h2'> & { node?: unknown }) {
-    return <MarkdownHeading level={level} pagePath={pagePath} pageIndex={pageIndex} {...props} />
+    return <MarkdownHeading level={level} pagePath={pagePath} {...props} />
   }
 }
 
@@ -168,12 +166,12 @@ export function MarkdownPreview({
     [headingIds],
   )
   const components = useMemo(() => ({
-    h1: headingComponent(1, pagePath, index),
-    h2: headingComponent(2, pagePath, index),
-    h3: headingComponent(3, pagePath, index),
-    h4: headingComponent(4, pagePath, index),
-    h5: headingComponent(5, pagePath, index),
-    h6: headingComponent(6, pagePath, index),
+    h1: headingComponent(1, pagePath),
+    h2: headingComponent(2, pagePath),
+    h3: headingComponent(3, pagePath),
+    h4: headingComponent(4, pagePath),
+    h5: headingComponent(5, pagePath),
+    h6: headingComponent(6, pagePath),
     a: ({ href = '', children, ...props }: ComponentPropsWithoutRef<'a'>) => {
       const internal = internalPathFor(href, pagePath, index)
       if (internal) return <Link to={internal}>{children}</Link>

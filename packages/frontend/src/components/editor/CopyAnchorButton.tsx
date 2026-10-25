@@ -1,18 +1,16 @@
 import { Link2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { anchorHref, relativeHeadingHref } from '../../lib/anchors'
+import { anchorHref } from '../../lib/anchors'
 import { Button } from '../ui/Button'
 
 export function CopyAnchorButton({
   pagePath,
-  pageIndex = false,
   anchorId,
   name,
   variant,
 }: {
   pagePath: string
-  pageIndex?: boolean
   anchorId: string
   name: string
   variant: 'heading' | 'section'
@@ -28,9 +26,7 @@ export function CopyAnchorButton({
   }, [copied])
 
   const copy = async () => {
-    const href = variant === 'heading'
-      ? relativeHeadingHref(pagePath, anchorId, pageIndex)
-      : anchorHref(pagePath, anchorId, window.location.origin)
+    const href = anchorHref(pagePath, anchorId, window.location.origin)
     try {
       await navigator.clipboard.writeText(href)
       setCopied(true)

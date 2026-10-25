@@ -133,3 +133,13 @@ export function preserveRelativeHref(href: string) {
   if (!host || host.includes('.') || host.includes(':')) return href
   return rest
 }
+
+// The link form accepts an absolute page URL. Store the same relative href the
+// editor already saves for `/page/...` and `./...` links.
+export function hrefForEditorLink(href: string, pagePath: string, index = false) {
+  const preserved = preserveRelativeHref(href)
+  if (isFilesystemMarkdownHref(preserved)) return preserved
+  const parsed = parsePageHref(preserved, pagePath, index)
+  if (!parsed) return preserved
+  return `${relativePageHref(pagePath, parsed.path, index)}${parsed.suffix}`
+}
