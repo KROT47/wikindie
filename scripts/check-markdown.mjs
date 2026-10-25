@@ -211,6 +211,49 @@ test('relative page links round-trip the way the browser resolves /page/<path>',
   assert.equal(wiki.preserveRelativeHref('mailto:dev@example.com'), 'mailto:dev@example.com')
 })
 
+test('markdown file links stay under the current page and drop _Index.md in the UI', () => {
+  const cases = [
+    ['category', './X.md', '/page/category/X.md'],
+    ['category/nested', './X.md', '/page/category/nested/X.md'],
+    ['a/b/c', './X.md', '/page/a/b/c/X.md'],
+    ['a/b/c', '../X.md', '/page/a/b/X.md'],
+    ['a/b/c', '../../X.md', '/page/a/X.md'],
+    ['a/b/c', '../../../X.md', '/page/X.md'],
+    ['a/b/c', './d/e/X.md', '/page/a/b/c/d/e/X.md'],
+    ['category', 'X.md', '/page/category/X.md'],
+    ['category', '../X.md', '/page/X.md'],
+    ['Planning/Decision Log', './notes.md', '/page/Planning/Decision%20Log/notes.md'],
+    ['category', './Foo%20%28bar%29.md', '/page/category/Foo%20(bar).md'],
+    ['category', './X.md#part', '/page/category/X.md#part'],
+    ['', './ideas/_Index.md', '/page/ideas'],
+    ['category', './ideas/_Index.md', '/page/category/ideas'],
+    ['a/b', './nested/ideas/_Index.md', '/page/a/b/nested/ideas'],
+    ['a/b/c', '../ideas/_Index.md', '/page/a/b/ideas'],
+    ['a/b/c', '../../ideas/_Index.md', '/page/a/ideas'],
+    ['a/b/c', '../../../ideas/_Index.md', '/page/ideas'],
+    ['Workspace/Projects', './Atlas/_Index.md', '/page/Workspace/Projects/Atlas'],
+    ['Workspace/Projects/Atlas', '../_Index.md', '/page/Workspace/Projects'],
+    ['category', './_Index.md', '/page/category'],
+    ['category', './ideas/_Index.md#note', '/page/category/ideas#note'],
+    ['', './ideas/_Index.md#note', '/page/ideas#note'],
+  ]
+  for (const [from, href, target] of cases) {
+    assert.equal(paths.previewNavigationHref(href, from), target, `${href} from ${from || '(root)'}`)
+  }
+
+  assert.equal(paths.previewNavigationHref('/page/ideas/_Index.md', 'category'), '/page/ideas')
+  assert.equal(paths.previewNavigationHref('/page/ideas/_Index.md#note', 'Notes'), '/page/ideas#note')
+  assert.equal(paths.previewNavigationHref('./GAME_PROGRESSION', 'domain/ACTIVITY_LIFECYCLE'), '/page/domain/GAME_PROGRESSION')
+  assert.equal(paths.previewNavigationHref('ACTIVITY_LIFECYCLE/STEP', 'domain/ACTIVITY_LIFECYCLE'), '/page/domain/ACTIVITY_LIFECYCLE/STEP')
+  assert.equal(paths.previewNavigationHref('https://example.com/X.md', 'category'), null)
+  assert.equal(paths.previewNavigationHref('mailto:dev@example.com', 'category'), null)
+  assert.equal(paths.previewNavigationHref('../../../../X.md', 'a/b/c'), null)
+  assert.equal(
+    wiki.restoreProtectedWikiReferences('[X](./X.md)\n[Ideas](./ideas/_Index.md)\n[Up](../ideas/_Index.md#note)', 'category'),
+    '[X](./X.md)\n[Ideas](./ideas/_Index.md)\n[Up](../ideas/_Index.md#note)',
+  )
+})
+
 test('page hrefs keep fragments out of the document path', () => {
   const parsed = paths.parsePageHref('/page/Guide#installation', 'Notes')
   assert.equal(parsed.path, 'Guide')

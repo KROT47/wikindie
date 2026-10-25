@@ -50,7 +50,18 @@ export function protectWikiReferences(value: string, pagePath: string) {
   return replaceOutsideCode(value, (segment) => segment.split('\n').map((line) => protectReferencesInLine(line, pagePath)).join('\n'))
 }
 
+function isFilesystemMarkdownHref(href: string) {
+  const trimmed = href.trim()
+  const unwrapped = trimmed.startsWith('<') && trimmed.endsWith('>') && trimmed.length >= 2 ? trimmed.slice(1, -1).trim() : trimmed
+  if (!unwrapped || unwrapped.startsWith('#') || unwrapped.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(unwrapped)) return false
+  const path = unwrapped.split(/[?#]/)[0] ?? ''
+  return path.endsWith('.md')
+}
+
 function restoredReferenceFor(label: string, href: string, fallback: string, pagePath: string) {
+  // File links such as `./X.md` and `./ideas/_Index.md` stay in the Markdown.
+  // The UI drops `_Index.md` only when it builds the `/page/...` route.
+  if (isFilesystemMarkdownHref(href)) return fallback
   const parsed = parsePageHref(href, pagePath)
   if (!parsed) return fallback
   return `[${label}](${relativePageHref(pagePath, parsed.path)}${parsed.suffix})`

@@ -37,6 +37,54 @@ function pageLinkBase(fromPagePath: string) {
   return new URL(pageUrl(fromPagePath), PAGE_LINK_ORIGIN)
 }
 
+// A `.md` link is a file path. The current page is its directory, so `./X.md`
+// on `/page/category` stays `/page/category/X.md` instead of replacing `category`.
+function pageDirectoryBase(fromPagePath: string) {
+  const url = pageLinkBase(fromPagePath)
+  if (!url.pathname.endsWith('/')) url.pathname += '/'
+  return url
+}
+
+function markdownFilePath(href: string) {
+  const normalized = unwrapMarkdownHref(href)
+  if (!normalized || normalized.startsWith('#') || normalized.startsWith('/') || normalized.startsWith('//') || PAGE_LINK_SCHEME.test(normalized)) return null
+  const path = normalized.split(/[?#]/)[0] ?? ''
+  return path.endsWith('.md') ? normalized : null
+}
+
+function withoutIndexFile(pagePath: string) {
+  if (pagePath === '_Index.md') return ''
+  return pagePath.endsWith('/_Index.md') ? pagePath.slice(0, -'/_Index.md'.length) : pagePath
+}
+
+function markdownFilePageTarget(href: string, fromPagePath: string): ParsedPageHref | null {
+  const normalized = markdownFilePath(href)
+  if (!normalized) return null
+  try {
+    const url = new URL(normalized, pageDirectoryBase(fromPagePath))
+    if (url.origin !== PAGE_LINK_ORIGIN || !url.pathname.startsWith('/page/')) return null
+    const path = withoutIndexFile(pagePathFromLocation(url.pathname))
+    if (!path) return null
+    const hash = url.hash === WIKI_REFERENCE_HASH ? '' : url.hash
+    return { path, suffix: url.search + hash }
+  } catch {
+    return null
+  }
+}
+
+function pageHrefWithoutIndexFile(href: string) {
+  try {
+    const url = new URL(href, PAGE_LINK_ORIGIN)
+    const raw = pagePathFromLocation(url.pathname)
+    const path = withoutIndexFile(raw)
+    if (!path || path === raw) return href
+    const hash = url.hash === WIKI_REFERENCE_HASH ? '' : url.hash
+    return `${pageUrl(path)}${url.search}${hash}`
+  } catch {
+    return href
+  }
+}
+
 // The address bar is `/page/<path>` with no trailing slash, so the last segment
 // is the page name. A relative link is resolved from that URL's parent, which
 // is how the browser treats an `<a href>` on the page.
@@ -87,11 +135,17 @@ export function pagePathFromHref(href: string, fromPagePath: string) {
 export function previewNavigationHref(href: string, pagePath: string): string | null {
   if (!href) return null
   if (pagePath && href.startsWith('#')) return `${pageUrl(pagePath)}${href}`
+  const markdownFile = markdownFilePageTarget(href, pagePath)
+  if (markdownFile) return `${pageUrl(markdownFile.path)}${markdownFile.suffix}`
   if (pagePath) {
     const parsed = parsePageHref(href, pagePath)
-    if (parsed) return `${pageUrl(parsed.path)}${parsed.suffix}`
+    if (parsed) {
+      const path = withoutIndexFile(parsed.path)
+      if (!path) return null
+      return `${pageUrl(path)}${parsed.suffix}`
+    }
   }
-  if (href.startsWith('/page/')) return href
+  if (href.startsWith('/page/')) return pageHrefWithoutIndexFile(href)
   return null
 }
 

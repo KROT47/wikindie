@@ -410,7 +410,7 @@ export function KanbanCardDialog({
                         </div>
                       </div>
                     ) : (
-                      <MarkdownPreview content={comment.body} compact frameless />
+                      <MarkdownPreview content={comment.body} compact frameless pagePath={pagePath} />
                     )}
                   </article>
                 )

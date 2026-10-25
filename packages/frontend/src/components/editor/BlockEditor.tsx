@@ -15,7 +15,7 @@ import '@blocknote/shadcn/style.css'
 import './blocknote.css'
 import { api, isAttachmentUrl } from '../../lib/api'
 import { resolveAttachmentObjectUrl } from '../../lib/attachmentCache'
-import { pageUrl, parsePageHref } from '../../lib/paths'
+import { previewNavigationHref } from '../../lib/paths'
 import { useFilesStore } from '../../lib/store'
 import { applyImageWidths, collectImageWidths, restoreImageWidths } from './imageWidths'
 import { pagePickerItems } from './pagePicker'
@@ -45,10 +45,7 @@ function isEditorNavigationHref(href: string) {
 }
 
 function navigationHref(href: string, pagePath: string) {
-  if (href.startsWith('/')) return href
-  const parsed = parsePageHref(href, pagePath)
-  if (!parsed) return null
-  return `${pageUrl(parsed.path)}${parsed.suffix}`
+  return previewNavigationHref(href, pagePath) ?? (href.startsWith('/') ? href : null)
 }
 
 function anchorFromEvent(event: Event) {
