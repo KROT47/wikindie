@@ -1,6 +1,7 @@
 import { CheckCircle2, ChevronDown, CircleDot, FileText, HardDrive, Image as ImageIcon, Layout } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RecentPages } from '../components/welcome/RecentPages'
+import { useScrollRestoration } from '../hooks/useScrollRestoration'
 import { api, type WorkspaceStats } from '../lib/api'
 import { useAuthStore } from '../lib/store'
 
@@ -74,9 +75,13 @@ function StatRow({ icon, label, value, accent }: { icon: React.ReactNode; label:
 
 export function WelcomePage() {
   const username = useAuthStore((s) => s.username) ?? 'there'
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const recentRef = useRef<HTMLDivElement>(null)
+  useScrollRestoration(scrollRef)
+  useScrollRestoration(recentRef, 'recent')
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6">
+    <div ref={scrollRef} className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6">
       <header>
         <p className="text-xs font-semibold uppercase tracking-widest text-text-muted">Workspace home</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-text-heading md:text-3xl">
@@ -90,7 +95,7 @@ export function WelcomePage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">Recent Pages</h2>
             <span className="text-[11px] text-text-muted">Latest edits first</span>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={recentRef} className="min-h-0 flex-1 overflow-y-auto">
             <RecentPages />
           </div>
         </section>

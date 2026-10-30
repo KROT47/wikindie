@@ -1,8 +1,9 @@
 import { ArrowLeft, CheckCircle2, ChevronDown, ChevronRight, Eye, ListChecks, Pencil, Plus, Save, Settings } from 'lucide-react'
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { api, type PageBundle, type PageSection } from '../../lib/api'
 import { assignPageAnchors, decodeFragment, scrollAnchorIntoView } from '../../lib/anchors'
+import { isRestoringScroll, useScrollRestoration } from '../../hooks/useScrollRestoration'
 import { useMobileTaskPanel } from '../layout/AppLayout'
 import { breadcrumbsFromPath, canonicalPagePath, findTreeNode, goBack, pageNameFromPath, pageUrl } from '../../lib/paths'
 import { canDelete, canWrite, useAuthStore, useFilesStore } from '../../lib/store'
@@ -69,7 +70,9 @@ export function Editor({
 }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const navigationType = useNavigationType()
   const scrollRef = useRef<HTMLDivElement>(null)
+  useScrollRestoration(scrollRef)
   const contentRef = useRef<HTMLDivElement>(null)
   const lastNav = useRef('')
   const scrolledKey = useRef('')
@@ -144,6 +147,9 @@ export function Editor({
   })
 
   useEffect(() => {
+    // Back/forward restores the panel offset. Don't pull the reader to the heading.
+    if (isRestoringScroll(location.key, location.pathname)) return
+
     const fragment = decodeFragment(location.hash)
     const navKey = `${page.path}#${fragment}`
     if (!fragment) {
@@ -214,7 +220,7 @@ export function Editor({
       root.removeEventListener('wheel', release)
       root.removeEventListener('touchstart', release)
     }
-  }, [anchorLoad, editing, editingSection, location.hash, page.content, page.path, savedContent, sectionsSynced])
+  }, [anchorLoad, editing, editingSection, location.hash, location.key, navigationType, page.content, page.path, savedContent, sectionsSynced])
   const statusLabel = mayWrite ? (status === 'dirty' ? 'Unsaved changes' : status === 'saving' ? 'Saving...' : 'Saved') : 'Read only'
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, CheckCircle2, ListChecks, Plus, Settings } from 'lucide-react'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type CardPriority, type CardType, type KanbanBoard as Board, type KanbanCard as Card, type PageBundle, type TaskIdSettings } from '../../lib/api'
 import { cardTypeLabel, cardTypeOptions } from '../../lib/cardType'
@@ -8,6 +8,7 @@ import { breadcrumbsFromPath, findTreeNode, goBack, pageNameFromPath, pageUrl } 
 import { priorityColor, priorityLabel, priorityRank } from '../../lib/priority'
 import { canWrite, useAuthStore, useFilesStore, useGuestMode, useTaskFiltersStore } from '../../lib/store'
 import { compileSearchRegex, defaultTaskFilters, hasAppliedFilters, matchesKanbanCardFilters, type TaskFilterValues } from '../../lib/taskFilters'
+import { useScrollRestoration } from '../../hooks/useScrollRestoration'
 import { useMobileTaskPanel } from '../layout/AppLayout'
 import { ActionMenu, ActionMenuItem } from '../ui/ActionMenu'
 import { UserIconBadge } from '../ui/AssigneeBadges'
@@ -94,6 +95,12 @@ export function KanbanBoard({
   const [taskIdsEnabled, setTaskIdsEnabled] = useState(() => taskIdSettingsFromFrontmatter(frontmatter, title || path).enabled)
   const [taskIdPrefix, setTaskIdPrefix] = useState(() => taskIdSettingsFromFrontmatter(frontmatter, title || path).prefix)
   const [viewMode, setViewMode] = useState<'board' | 'table'>('board')
+  const boardScrollRef = useRef<HTMLDivElement>(null)
+  const columnsScrollRef = useRef<HTMLDivElement>(null)
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  useScrollRestoration(boardScrollRef)
+  useScrollRestoration(columnsScrollRef, 'columns', viewMode)
+  useScrollRestoration(tableScrollRef, 'table', viewMode)
   const breadcrumbs = useMemo(
     () => breadcrumbsFromPath(path).map((c) => ({
       ...c,
@@ -373,7 +380,7 @@ export function KanbanBoard({
         </div>
       </header>
 
-      <div className="board-scroll flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-content p-3 sm:p-4 md:p-6 xl:p-8">
+      <div ref={boardScrollRef} className="board-scroll flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-content p-3 sm:p-4 md:p-6 xl:p-8">
       {mayWrite && metaEditing && (
         <article className="mb-4 max-w-5xl rounded-md border border-border bg-card p-4 shadow-sm shadow-shadow sm:mb-6 sm:p-5">
           <div className="mb-5 flex items-center justify-between gap-3">
@@ -464,7 +471,7 @@ export function KanbanBoard({
         </form>
       )}
       {viewMode === 'board' ? (
-        <div className="workspace-scroll min-h-0 flex-1 overflow-x-auto overflow-y-visible pb-2">
+        <div ref={columnsScrollRef} className="workspace-scroll min-h-0 flex-1 overflow-x-auto overflow-y-visible pb-2">
           <div className="grid min-w-0 grid-cols-1 items-start gap-3 sm:w-max sm:grid-flow-col sm:auto-cols-[280px] sm:grid-cols-none sm:gap-4">
             {visibleColumns.map(({ column, columnIndex, cards }) => (
               <KanbanColumn
@@ -489,7 +496,7 @@ export function KanbanBoard({
           </div>
         </div>
       ) : (
-        <KanbanTableView board={board} editable={mayWrite} availableLabels={labelOptions} pagePath={path} rows={tableCards} showAssignees={showAssignees} users={users} onUpdate={update} onAddComment={addComment} onUpdateComment={updateComment} onDeleteComment={deleteComment} />
+        <KanbanTableView scrollRef={tableScrollRef} board={board} editable={mayWrite} availableLabels={labelOptions} pagePath={path} rows={tableCards} showAssignees={showAssignees} users={users} onUpdate={update} onAddComment={addComment} onUpdateComment={updateComment} onDeleteComment={deleteComment} />
       )}
       {shownCardCount === 0 && (
         <div className="mt-5 rounded-md border border-dashed border-border bg-surface/70 p-6 text-center text-sm text-text-muted">
@@ -517,6 +524,7 @@ export function KanbanBoard({
 }
 
 function KanbanTableView({
+  scrollRef,
   board,
   editable,
   availableLabels,
@@ -529,6 +537,7 @@ function KanbanTableView({
   onUpdateComment,
   onDeleteComment,
 }: {
+  scrollRef: RefObject<HTMLDivElement | null>
   board: Board
   editable: boolean
   availableLabels: string[]
@@ -590,7 +599,7 @@ function KanbanTableView({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface">
-      <div className="workspace-scroll min-h-0 flex-1 overflow-auto">
+      <div ref={scrollRef} className="workspace-scroll min-h-0 flex-1 overflow-auto">
       <table className="min-w-[680px] w-full border-collapse text-left text-sm">
         <thead className="sticky top-0 z-10 bg-panel text-xs uppercase tracking-wide text-text-muted">
           <tr>

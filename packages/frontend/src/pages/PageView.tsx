@@ -22,7 +22,8 @@ function isCurrentPageEvent(currentPath: string, changedFilePath?: string) {
 export function PageView() {
   const params = useParams()
   const path = useMemo(() => paramToPath(params['*']), [params])
-  const [page, setPage] = useState<PageBundle | null>(null)
+  const [page, setPage] = useState<PageBundle | null>(() => pageCache.get(path) ?? null)
+  const [loadedPath, setLoadedPath] = useState(path)
   const [error, setError] = useState('')
   const [anchorLoad, setAnchorLoad] = useState({ path: '', id: 0 })
   const localEditingRef = useRef(false)
@@ -30,12 +31,18 @@ export function PageView() {
     localEditingRef.current = active
   }, [])
 
+  // Swap in the cached page during render so Back restores scroll before paint,
+  // instead of leaving the previous page mounted for an effect tick.
+  if (loadedPath !== path) {
+    localEditingRef.current = false
+    setLoadedPath(path)
+    setPage(pageCache.get(path) ?? null)
+    setError('')
+  }
+
   useEffect(() => {
     let cancelled = false
-    const cached = pageCache.get(path)
     localEditingRef.current = false
-    setPage(cached ?? null)
-    setError('')
 
     api
       .page(path)
@@ -45,7 +52,9 @@ export function PageView() {
         setPage(result)
         setAnchorLoad((current) => ({ path, id: current.id + 1 }))
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load page'))
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load page')
+      })
 
     return () => {
       cancelled = true

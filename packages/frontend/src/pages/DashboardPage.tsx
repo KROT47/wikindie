@@ -1,5 +1,5 @@
 import { Copy, KeyRound, Shield, Trash2, UserPlus } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { McpConnectionPanel } from '../components/integrations/McpConnectionPanel'
 import { Button } from '../components/ui/Button'
@@ -9,6 +9,7 @@ import { api, type ApiKeyRecord } from '../lib/api'
 import { adminApi, type AdminUser } from '../lib/adminApi'
 import { roleBadgeClass } from '../lib/badges'
 import { formatDate } from '../lib/format'
+import { useScrollRestoration } from '../hooks/useScrollRestoration'
 import { useAuthStore, type Role } from '../lib/store'
 
 const allRoles: Role[] = ['admin', 'editor', 'readonly']
@@ -135,6 +136,8 @@ export function DashboardPage() {
   const defaultTab: DashboardTab = isAdmin ? 'users' : 'ai'
 
   const [searchParams, setSearchParams] = useSearchParams()
+  const scrollRef = useRef<HTMLElement>(null)
+  useScrollRestoration(scrollRef)
   const tab = resolveTab(searchParams.get('tab'), isAdmin)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([])
@@ -274,7 +277,7 @@ export function DashboardPage() {
   }
 
   return (
-    <section className="workspace-scroll h-full overflow-y-auto">
+    <section ref={scrollRef} className="workspace-scroll h-full overflow-y-auto">
       <div className="mx-auto max-w-6xl p-4 md:p-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
