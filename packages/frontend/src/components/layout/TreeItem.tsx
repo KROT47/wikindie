@@ -1,5 +1,5 @@
 import { ChevronRight, Pencil, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { api, type TreeNode } from '../../lib/api'
 import { setDragPreview } from '../../lib/dragPreview'
@@ -20,6 +20,20 @@ function basename(path: string) {
 
 function joinPath(...parts: string[]) {
   return parts.filter(Boolean).join('/').replace(/\/+/g, '/')
+}
+
+function openStateKey(path: string) {
+  return `wikindie:open:${path}`
+}
+
+let suppressRevealPath: string | null = null
+
+export function persistCollapsedPageTree(nodes: TreeNode[]) {
+  for (const node of nodes) {
+    if (!node.children?.length) continue
+    localStorage.setItem(openStateKey(node.path), 'false')
+    persistCollapsedPageTree(node.children)
+  }
 }
 
 function validMove(source: PageDragPayload, targetParent: string) {
@@ -44,6 +58,7 @@ export function TreeItem({
   siblings,
   onRefresh,
   onPageDragChange,
+  collapseAllNonce,
 }: {
   node: TreeNode
   depth?: number
@@ -51,8 +66,10 @@ export function TreeItem({
   siblings: TreeNode[]
   onRefresh: () => Promise<void>
   onPageDragChange: (active: boolean) => void
+  collapseAllNonce: number
 }) {
-  const [open, setOpen] = useState(() => localStorage.getItem(`wikindie:open:${node.path}`) !== 'false')
+  const [open, setOpen] = useState(() => localStorage.getItem(openStateKey(node.path)) !== 'false')
+  const collapseAllNonceRef = useRef(collapseAllNonce)
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(node.title)
   const [moving, setMoving] = useState(false)
@@ -64,6 +81,7 @@ export function TreeItem({
   const [dragging, setDragging] = useState(false)
   const renameFormRef = useRef<HTMLFormElement>(null)
   const rowRef = useRef<HTMLDivElement>(null)
+  const openAtGestureStart = useRef(open)
   const navigate = useNavigate()
   const location = useLocation()
   const role = useAuthStore((state) => state.role)
@@ -81,9 +99,15 @@ export function TreeItem({
   }, [node.title])
 
   const toggle = () => {
-    localStorage.setItem(`wikindie:open:${node.path}`, String(!open))
+    localStorage.setItem(openStateKey(node.path), String(!open))
     setOpen(!open)
   }
+
+  useLayoutEffect(() => {
+    if (collapseAllNonceRef.current === collapseAllNonce) return
+    collapseAllNonceRef.current = collapseAllNonce
+    setOpen(false)
+  }, [collapseAllNonce])
 
   const submitRename = useCallback(async () => {
     if (!mayWrite) return
@@ -239,6 +263,23 @@ export function TreeItem({
   const isActive = currentPagePath === node.path || currentPagePath.startsWith(`${node.path}/`)
   const hasChildren = Boolean(node.children?.length)
 
+  const expand = () => {
+    localStorage.setItem(openStateKey(node.path), 'true')
+    setOpen(true)
+  }
+
+  useLayoutEffect(() => {
+    if (!hasChildren || !currentPagePath) return
+    const selectedHere = currentPagePath === node.path || currentPagePath.startsWith(`${node.path}/`)
+    if (!selectedHere) {
+      if (suppressRevealPath === node.path) suppressRevealPath = null
+      return
+    }
+    if (suppressRevealPath === node.path && currentPagePath === node.path) return
+    if (suppressRevealPath === node.path) suppressRevealPath = null
+    expand()
+  }, [currentPagePath, hasChildren, node.path])
+
   return (
     <div
       className={`${dragMode === 'inside' ? 'rounded-md bg-accent/10 ring-1 ring-accent/40' : ''} ${dragging ? 'opacity-60' : ''} ${depth > 0 ? 'border-l border-border/60' : ''}`}
@@ -258,7 +299,7 @@ export function TreeItem({
         className={`group relative flex items-center rounded-md transition-colors ${isActive ? 'bg-accent/10' : 'hover:bg-surface-hover'}`}
         ref={rowRef}
       >
-        {isActive && <span aria-hidden className="pointer-events-none absolute inset-y-1 left-0 w-0.5 rounded-full bg-accent" />}
+        <span aria-hidden className={`pointer-events-none absolute inset-y-1 left-0 w-0.5 rounded-full bg-accent ${isActive ? '' : 'opacity-0'}`} />
         {(dragMode === 'before' || dragMode === 'after') && (
           <div className={`pointer-events-none absolute left-4 right-1.5 z-10 flex items-center ${dragMode === 'before' ? '-top-1.5' : '-bottom-1.5'}`}>
             <span className="h-1 flex-1 rounded-full bg-accent shadow-[0_0_12px_var(--color-accent)]" />
@@ -324,9 +365,24 @@ export function TreeItem({
             draggable={mayWrite}
             onDragStart={mayWrite ? startPageDrag : undefined}
             onDragEnd={endPageDrag}
+            onPointerDown={(event) => {
+              if (event.button !== 0 || event.detail > 1) return
+              openAtGestureStart.current = open
+            }}
+            onClick={(event) => {
+              if (!hasChildren || event.detail > 1) return
+              expand()
+            }}
+            onDoubleClick={() => {
+              if (!hasChildren) return
+              const next = !openAtGestureStart.current
+              suppressRevealPath = next ? null : node.path
+              localStorage.setItem(openStateKey(node.path), String(next))
+              setOpen(next)
+            }}
           >
             <PageIcon icon={node.icon} fallback={node.type === 'board' ? 'board' : 'page'} className="size-5 text-base" />
-            <span className={`min-w-0 truncate ${collapsed ? 'lg:hidden' : ''}`}>{node.title}</span>
+            <span className={`min-w-0 truncate ${hasChildren ? 'select-none' : ''} ${collapsed ? 'lg:hidden' : ''}`}>{node.title}</span>
           </NavLink>
         )}
 
@@ -423,7 +479,18 @@ export function TreeItem({
 
       {open && (
         <div className={collapsed ? 'lg:hidden' : ''}>
-          {node.children?.map((child) => <TreeItem key={child.path} node={child} depth={depth + 1} collapsed={collapsed} siblings={node.children ?? []} onRefresh={onRefresh} onPageDragChange={onPageDragChange} />)}
+          {node.children?.map((child) => (
+            <TreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              collapsed={collapsed}
+              siblings={node.children ?? []}
+              onRefresh={onRefresh}
+              onPageDragChange={onPageDragChange}
+              collapseAllNonce={collapseAllNonce}
+            />
+          ))}
         </div>
       )}
     </div>

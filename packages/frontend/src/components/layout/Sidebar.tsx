@@ -1,4 +1,4 @@
-import { Github, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react'
+import { ChevronsDownUp, Github, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logoUrl from '../../assets/wikindie_logo.png'
@@ -10,7 +10,7 @@ import { appVersion, githubUrl } from '../../lib/version'
 import { PageIcon } from '../ui/PageIcon'
 
 import { AccountMenu } from './AccountMenu'
-import { TreeItem } from './TreeItem'
+import { persistCollapsedPageTree, TreeItem } from './TreeItem'
 
 const sidebarWidthKey = 'wikindie:sidebar-width'
 const defaultSidebarWidth = 300
@@ -54,6 +54,7 @@ export function Sidebar({
   const [rootDragOver, setRootDragOver] = useState(false)
   const [width, setWidth] = useState(readStoredSidebarWidth)
   const [resizing, setResizing] = useState(false)
+  const [collapseAllNonce, setCollapseAllNonce] = useState(0)
   const widthRef = useRef(width)
   const asideRef = useRef<HTMLElement>(null)
 
@@ -114,6 +115,11 @@ export function Sidebar({
   const selectedNode = useMemo(() => (selectedPath ? findTreeNode(tree, selectedPath) : undefined), [selectedPath, tree])
 
   const refreshTree = async () => setTree((await api.tree()).tree)
+
+  const collapseAllPages = () => {
+    persistCollapsedPageTree(tree)
+    setCollapseAllNonce((nonce) => nonce + 1)
+  }
 
   const setPageDragging = (active: boolean) => {
     setPageDragActive(active)
@@ -289,9 +295,20 @@ export function Sidebar({
         {/* Zone C: Vault heading + mobile close toggle */}
         <div className={`flex items-center justify-between px-4 py-2 ${collapsed ? 'lg:hidden' : ''}`}>
           <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">Vault</span>
-          <button className="rounded p-1 text-text-muted hover:bg-accent/10 hover:text-text lg:hidden" onClick={onCloseMobile} title="Close">
-            <X size={18} />
-          </button>
+          <div className="flex items-center">
+            <button
+              className="rounded p-1 text-text-muted hover:bg-accent/10 hover:text-text"
+              onClick={collapseAllPages}
+              title="Collapse all"
+              aria-label="Collapse all"
+              type="button"
+            >
+              <ChevronsDownUp size={16} />
+            </button>
+            <button className="rounded p-1 text-text-muted hover:bg-accent/10 hover:text-text lg:hidden" onClick={onCloseMobile} title="Close">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Zone D: Nav tree */}
@@ -309,7 +326,7 @@ export function Sidebar({
           onDrop={dropOnRoot}
         >
           {tree.map((node) => (
-            <TreeItem key={node.path} node={node} collapsed={collapsed} siblings={tree} onRefresh={refreshTree} onPageDragChange={setPageDragging} />
+            <TreeItem key={node.path} node={node} collapsed={collapsed} siblings={tree} onRefresh={refreshTree} onPageDragChange={setPageDragging} collapseAllNonce={collapseAllNonce} />
           ))}
           {mayWrite && pageDragActive && (
             <div className={`mt-2 rounded-md border border-dashed border-border px-3 py-2 text-center text-xs text-text-muted ${collapsed ? 'lg:hidden' : ''}`}>
