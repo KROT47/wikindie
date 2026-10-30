@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import logoUrl from '../../assets/wikindie_logo.png'
 import { api } from '../../lib/api'
 import { getPageDragPayload, hasPageDragPayload } from '../../lib/pageDrag'
-import { findTreeNode, pagePathFromLocation, pageUrl } from '../../lib/paths'
+import { canonicalPagePath, findTreeNode, pagePathFromLocation, pageUrl } from '../../lib/paths'
 import { canWrite, useAuthStore, useFilesStore } from '../../lib/store'
 import { appVersion, githubUrl } from '../../lib/version'
 import { PageIcon } from '../ui/PageIcon'
@@ -110,7 +110,7 @@ export function Sidebar({
     persistWidth()
   }
 
-  const selectedPath = useMemo(() => pagePathFromLocation(location.pathname), [location.pathname])
+  const selectedPath = useMemo(() => canonicalPagePath(pagePathFromLocation(location.pathname)), [location.pathname])
   const selectedNode = useMemo(() => (selectedPath ? findTreeNode(tree, selectedPath) : undefined), [selectedPath, tree])
 
   const refreshTree = async () => setTree((await api.tree()).tree)

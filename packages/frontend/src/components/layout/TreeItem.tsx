@@ -4,7 +4,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { api, type TreeNode } from '../../lib/api'
 import { setDragPreview } from '../../lib/dragPreview'
 import { getPageDragPayload, hasPageDragPayload, setPageDragPayload, type PageDragPayload } from '../../lib/pageDrag'
-import { pageUrl, pagePathFromLocation } from '../../lib/paths'
+import { canonicalPagePath, pageUrl, pagePathFromLocation } from '../../lib/paths'
 import { canDelete, canWrite, useAuthStore } from '../../lib/store'
 import { ActionMenu, ActionMenuItem } from '../ui/ActionMenu'
 import { PageIcon } from '../ui/PageIcon'
@@ -235,7 +235,7 @@ export function TreeItem({
     navigate(pageUrl(newPath))
   }
 
-  const currentPagePath = pagePathFromLocation(location.pathname)
+  const currentPagePath = canonicalPagePath(pagePathFromLocation(location.pathname))
   const isActive = currentPagePath === node.path || currentPagePath.startsWith(`${node.path}/`)
   const hasChildren = Boolean(node.children?.length)
 
